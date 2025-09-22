@@ -43,9 +43,10 @@ export const addProduct = asyncHandler(async (req, res, next) => {
         images = req.files.map(file => ({
             original: file.path
         }));
-    } else {
-        return next(new AppError("Please upload at least one image", 400));
     }
+    // } else {
+    //     return next(new AppError("Please upload at least one image", 400));
+    // }
 
     const product = new productModel({ name, price, description, category, stock, image: images, brand, discount, raise: 0, hide: false });
     await product.save();
