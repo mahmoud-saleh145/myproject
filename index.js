@@ -21,7 +21,7 @@ app.use(cookieParser());
 app.use(attachSession);
 
 app.get("/", (req, res) => {
-    res.send("Hello")
+    res.json({ msg: "Hello" })
 })
 
 
