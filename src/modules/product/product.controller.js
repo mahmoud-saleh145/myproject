@@ -75,8 +75,6 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
     res.status(200).json({ msg: "success", product });
 })
 
-
-
 export const updateManyProductBrand = asyncHandler(async (req, res, next) => {
     const { brand, raise, discount } = req.body;
     const products = await productModel.updateMany({ brand }, { raise, discount });
