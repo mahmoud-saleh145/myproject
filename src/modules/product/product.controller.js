@@ -62,18 +62,23 @@ export const addProduct = asyncHandler(async (req, res, next) => {
 
 export const updateProduct = asyncHandler(async (req, res, next) => {
     const { id, name, price, description, category, stock, brand, discount, raise, hide } = req.body;
+
     let images = [];
     if (req.files && req.files.length > 0) {
-        images = req.files.map(file => ({
-            original: file.path
-        }));
-    } else {
-        return next(new AppError("Please upload at least one image", 400));
+        for (const file of req.files) {
+            const uploadResult = await cloudinary.uploader.upload(file.path, { folder: "products" });
+            images.push({ original: uploadResult.secure_url });
+        }
     }
 
-    const product = await productModel.updateOne({ _id: id }, { name, price, description, category, stock, image: images, brand, discount, raise, hide });
+    const updateData = { name, price, description, category, stock, brand, discount, raise, hide };
+    if (images.length > 0) updateData.image = images;
+
+    const product = await productModel.updateOne({ _id: id }, updateData);
+
     res.status(200).json({ msg: "success", product });
-})
+});
+
 
 export const updateManyProductBrand = asyncHandler(async (req, res, next) => {
     const { brand, raise, discount } = req.body;
