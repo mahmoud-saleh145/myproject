@@ -36,25 +36,38 @@ export const getProducts = asyncHandler(async (req, res, next) => {
     });
 });
 
+
+
+const uploadToCloudinary = async (file) => {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            { folder: 'products' },
+            (error, result) => {
+                if (result) resolve(result);
+                else reject(error);
+            }
+        );
+        if (file.buffer) stream.end(file.buffer);
+        else stream.end(fs.readFileSync(file.path));
+    });
+};
+
 export const addProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { name, price, description, category, stock, brand, discount } = req.body;
-    if (!name || !price || !description || !category || !stock) {
-        return next(new AppError("Please provide all required fields", 400));
-    }
-    if ((!req.files || req.files.length === 0) && (!req.body.images || req.body.images.length === 0)) {
-        return next(new AppError("Please upload at least one image", 400));
-    }
-    let images = [];
-    if (req.files && req.files.length > 0) {
-        const uploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path, { folder: "products" }));
-        const uploadResults = await Promise.all(uploadPromises);
-        images = uploadResults.map(result => ({ original: result.secure_url }));
-        req.files.forEach(file => fs.unlinkSync(file.path));
 
-    } else if (req.body.images && req.body.images.length > 0) {
-        images = req.body.images.map(url => ({ original: url }));
+    const { name, price, description, category, stock, brand, discount } = req.body;
+
+    if (!name || !price || !description || !category || !stock) {
+        return next(new AppError('Please provide all required fields', 400));
     }
+
+    if (!req.files || req.files.length === 0) {
+        return next(new AppError('Please upload at least one image', 400));
+    }
+
+    const uploadResults = await Promise.all(req.files.map(file => uploadToCloudinary(file)));
+    const images = uploadResults.map(res => ({ original: res.secure_url }));
+
     const product = new productModel({
         name,
         price,
@@ -68,7 +81,7 @@ export const addProduct = asyncHandler(async (req, res, next) => {
         hide: false
     });
     await product.save();
-    res.status(201).json({ msg: "success", product });
+    res.status(201).json({ msg: 'success', product });
 });
 
 export const updateProduct = asyncHandler(async (req, res, next) => {
