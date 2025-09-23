@@ -6,13 +6,13 @@ import productModel from './../../../db/models/product.model.js';
 import fs from "fs";
 
 export const getProducts = asyncHandler(async (req, res, next) => {
-    let page = Math.max(parseInt(req.body?.page) || 1, 1);
-    let limit = Math.max(parseInt(req.body?.limit) || 10, 1);
+    let page = Math.max(parseInt(req.query?.page) || 1, 1);
+    let limit = Math.max(parseInt(req.query?.limit) || 10, 1);
     let skip = (page - 1) * limit;
     // Search / Filter
     let query = {};
-    if (req.body.search) {
-        const search = req.body.search;
+    if (req.query.search) {
+        const search = req.query.search;
         query = {
             $or: [
                 { name: { $regex: search, $options: "i" } },
