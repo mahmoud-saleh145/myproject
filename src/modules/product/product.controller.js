@@ -1,3 +1,4 @@
+import connectToDB from '../../../db/connectionDB.js';
 import { AppError } from '../../utils/classError.js';
 import cloudinary from '../../utils/cloudinary.js';
 import { asyncHandler } from '../../utils/globalErrorHandling.js';
@@ -5,8 +6,8 @@ import productModel from './../../../db/models/product.model.js';
 import fs from "fs";
 
 export const getProducts = asyncHandler(async (req, res, next) => {
-    let page = Math.max(parseInt(req.body.page) || 1, 1);
-    let limit = Math.max(parseInt(req.body.limit) || 10, 1);
+    let page = Math.max(parseInt(req.body?.page) || 1, 1);
+    let limit = Math.max(parseInt(req.body?.limit) || 10, 1);
     let skip = (page - 1) * limit;
     // Search / Filter
     let query = {};
@@ -36,6 +37,7 @@ export const getProducts = asyncHandler(async (req, res, next) => {
 
 
 export const addProduct = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { name, price, description, category, stock, brand, discount } = req.body;
     if (!name || !price || !description || !category || !stock) {
         return next(new AppError("Please provide all required fields", 400));

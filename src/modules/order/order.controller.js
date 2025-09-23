@@ -124,3 +124,11 @@ export const createOrder = asyncHandler(async (req, res, next) => {
 
     res.status(201).json({ msg: "Order created successfully", order });
 });
+
+
+
+
+export const getOrders = asyncHandler(async (req, res, next) => {
+    const orders = await orderModel.find();
+    res.status(200).json({ msg: "success", orders: orders })
+})
