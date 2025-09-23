@@ -1,6 +1,8 @@
 import { AppError } from '../../utils/classError.js';
+import cloudinary from '../../utils/cloudinary.js';
 import { asyncHandler } from '../../utils/globalErrorHandling.js';
 import productModel from './../../../db/models/product.model.js';
+import fs from "fs";
 
 export const getProducts = asyncHandler(async (req, res, next) => {
     let page = Math.max(parseInt(req.body.page) || 1, 1);
@@ -38,15 +40,18 @@ export const addProduct = asyncHandler(async (req, res, next) => {
     if (!name || !price || !description || !category || !stock) {
         return next(new AppError("Please provide all required fields", 400));
     }
-    let images = [];
-    if (req.files && req.files.length > 0) {
-        images = req.files.map(file => ({
-            original: file.path
-        }));
+
+    if (!req.files || req.files.length === 0) {
+        return next(new AppError("Please upload at least one image", 400));
     }
-    // } else {
-    //     return next(new AppError("Please upload at least one image", 400));
-    // }
+
+    let images = [];
+    for (const file of req.files) {
+        const uploadResult = await cloudinary.uploader.upload(file.path, { folder: "products" });
+        images.push({ original: uploadResult.secure_url });
+
+        fs.unlinkSync(file.path);
+    }
 
     const product = new productModel({ name, price, description, category, stock, image: images, brand, discount, raise: 0, hide: false });
     await product.save();
