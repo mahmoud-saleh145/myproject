@@ -1,3 +1,4 @@
+import connectToDB from "../../../db/connectionDB.js";
 import cartModel from "../../../db/models/cart.model.js";
 import { AppError } from "../../utils/classError.js";
 import { asyncHandler } from "../../utils/globalErrorHandling.js";
@@ -6,11 +7,13 @@ import mongoose from "mongoose";
 
 
 export const getCarts = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const carts = await cartModel.find().populate("items.productId");
     res.status(200).json({ msg: "success", carts: carts });
 })
 
 export const addToCart = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const sessionId = req.cookies.sessionId;
     const userId = req.body.userId;
     const { productId, quantity } = req.body;
@@ -57,6 +60,7 @@ export const addToCart = asyncHandler(async (req, res, next) => {
 })
 
 export const getCart = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const sessionId = req.cookies.sessionId;
     const userId = req.user?._id || req.body.userId;
     let cart = null;
@@ -69,6 +73,7 @@ export const getCart = asyncHandler(async (req, res, next) => {
 });
 
 export const mergeCart = asyncHandler(async (req, res, next) => {
+    await connectToDB();
 
     const { userId } = req.body;
     const sessionId = req.cookies.sessionId;
@@ -108,6 +113,7 @@ export const mergeCart = asyncHandler(async (req, res, next) => {
 })
 
 export const addQuantity = asyncHandler(async (req, res, next) => {
+    await connectToDB();
 
     const { productId, userId } = req.body;
     const sessionId = req.cookies.sessionId;
@@ -165,6 +171,7 @@ export const addQuantity = asyncHandler(async (req, res, next) => {
 })
 
 export const reduceQuantity = asyncHandler(async (req, res, next) => {
+    await connectToDB();
 
     const { productId, userId } = req.body;
     const sessionId = req.cookies.sessionId;
@@ -213,6 +220,7 @@ export const reduceQuantity = asyncHandler(async (req, res, next) => {
 })
 
 export const emptyCart = asyncHandler(async (req, res, next) => {
+    await connectToDB();
 
     const { userId } = req.body;
     const sessionId = req.cookies.sessionId;
@@ -249,6 +257,7 @@ export const emptyCart = asyncHandler(async (req, res, next) => {
 })
 
 export const removeProduct = asyncHandler(async (req, res, next) => {
+    await connectToDB();
 
     const { productId, userId } = req.body;
     const sessionId = req.cookies.sessionId;

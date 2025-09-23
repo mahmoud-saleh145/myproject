@@ -1,3 +1,4 @@
+import connectToDB from '../../../db/connectionDB.js';
 import { sendEmail } from '../../serves/sendEmail.js';
 import { AppError } from '../../utils/classError.js';
 import { asyncHandler } from '../../utils/globalErrorHandling.js';
@@ -6,11 +7,13 @@ import userModel from './../../../db/models/user.model.js';
 
 
 export const getUsers = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const users = await userModel.find();
     res.status(200).json({ msg: "success", users: users })
 })
 
 export const addUser = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { email } = req.body;
     const emailRegex = /^[A-Za-z0-9._%+-]{2,}@[A-Za-z0-9.-]+\.(com)$/;
     const isExist = await userModel.findOne({ email: email }).populate("orders.orderId");
@@ -30,6 +33,7 @@ export const addUser = asyncHandler(async (req, res, next) => {
 })
 
 export const getUserInfo = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { email } = req.body;
     const user = await userModel.findOne({ email: email }).populate("orders.orderId");
     if (!user) {

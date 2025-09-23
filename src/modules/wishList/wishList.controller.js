@@ -1,3 +1,4 @@
+import connectToDB from '../../../db/connectionDB.js';
 import productModel from '../../../db/models/product.model.js';
 import { AppError } from '../../utils/classError.js';
 import { asyncHandler } from '../../utils/globalErrorHandling.js';
@@ -5,6 +6,7 @@ import userModel from './../../../db/models/user.model.js';
 
 
 export const getWishlist = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { email } = req.body;
     if (!email) {
         return next(new AppError("please provide email", 404));
@@ -17,6 +19,7 @@ export const getWishlist = asyncHandler(async (req, res, next) => {
 });
 
 export const addToWishList = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { productID, email } = req.body;
 
     if (!productID) {
@@ -58,6 +61,7 @@ export const addToWishList = asyncHandler(async (req, res, next) => {
 })
 
 export const removeFromWishList = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { productID, email } = req.body;
 
     if (!productID) {
@@ -99,7 +103,7 @@ export const removeFromWishList = asyncHandler(async (req, res, next) => {
 });
 
 export const emptyWishList = asyncHandler(async (req, res, next) => {
-
+    await connectToDB();
     const { email } = req.body;
     if (!email) {
         return next(new AppError("please provide email", 400));

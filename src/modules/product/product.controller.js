@@ -6,13 +6,14 @@ import productModel from './../../../db/models/product.model.js';
 import fs from "fs";
 
 export const getProducts = asyncHandler(async (req, res, next) => {
-    let page = Math.max(parseInt(req.query?.page) || 1, 1);
-    let limit = Math.max(parseInt(req.query?.limit) || 10, 1);
+    await connectToDB();
+    let page = Math.max(parseInt(req.body?.page) || 1, 1);
+    let limit = Math.max(parseInt(req.body?.limit) || 10, 1);
     let skip = (page - 1) * limit;
     // Search / Filter
     let query = {};
-    if (req.query.search) {
-        const search = req.query.search;
+    if (req.body?.search) {
+        const search = req.body.search;
         query = {
             $or: [
                 { name: { $regex: search, $options: "i" } },
@@ -35,34 +36,43 @@ export const getProducts = asyncHandler(async (req, res, next) => {
     });
 });
 
-
 export const addProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const { name, price, description, category, stock, brand, discount } = req.body;
     if (!name || !price || !description || !category || !stock) {
         return next(new AppError("Please provide all required fields", 400));
     }
-
-    if (!req.files || req.files.length === 0) {
+    if ((!req.files || req.files.length === 0) && (!req.body.images || req.body.images.length === 0)) {
         return next(new AppError("Please upload at least one image", 400));
     }
-
     let images = [];
-    for (const file of req.files) {
-        const uploadResult = await cloudinary.uploader.upload(file.path, { folder: "products" });
-        images.push({ original: uploadResult.secure_url });
+    if (req.files && req.files.length > 0) {
+        const uploadPromises = req.files.map(file => cloudinary.uploader.upload(file.path, { folder: "products" }));
+        const uploadResults = await Promise.all(uploadPromises);
+        images = uploadResults.map(result => ({ original: result.secure_url }));
+        req.files.forEach(file => fs.unlinkSync(file.path));
 
-        fs.unlinkSync(file.path);
+    } else if (req.body.images && req.body.images.length > 0) {
+        images = req.body.images.map(url => ({ original: url }));
     }
-
-    const product = new productModel({ name, price, description, category, stock, image: images, brand, discount, raise: 0, hide: false });
+    const product = new productModel({
+        name,
+        price,
+        description,
+        category,
+        stock,
+        image: images,
+        brand,
+        discount,
+        raise: 0,
+        hide: false
+    });
     await product.save();
     res.status(201).json({ msg: "success", product });
-})
-
-
+});
 
 export const updateProduct = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { id, name, price, description, category, stock, brand, discount, raise, hide } = req.body;
 
     let images = [];
@@ -81,8 +91,8 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
     res.status(200).json({ msg: "success", product });
 });
 
-
 export const updateManyProductBrand = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { brand, raise, discount } = req.body;
     const products = await productModel.updateMany({ brand }, { raise, discount });
     if (products.matchedCount === 0) {
@@ -93,6 +103,7 @@ export const updateManyProductBrand = asyncHandler(async (req, res, next) => {
 })
 
 export const updateManyProductCategory = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const { category, raise, discount } = req.body;
     const products = await productModel.updateMany({ category }, { raise, discount });
 
@@ -104,6 +115,7 @@ export const updateManyProductCategory = asyncHandler(async (req, res, next) => 
 })
 
 export const getBrand = asyncHandler(async (req, res, next) => {
+    await connectToDB();
 
     const { brand } = req.body;
     if (!brand) {
@@ -121,7 +133,7 @@ export const getBrand = asyncHandler(async (req, res, next) => {
 })
 
 export const getCategory = asyncHandler(async (req, res, next) => {
-
+    await connectToDB();
     const { category } = req.body;
     if (!category) {
         return next(new AppError("Please provide a category name", 400));
@@ -139,6 +151,7 @@ export const getCategory = asyncHandler(async (req, res, next) => {
 })
 
 export const getAllCategories = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const categories = await productModel.aggregate([
         {
             $group: {
@@ -166,8 +179,8 @@ export const getAllCategories = asyncHandler(async (req, res, next) => {
     });
 });
 
-
 export const getAllBrands = asyncHandler(async (req, res, next) => {
+    await connectToDB();
     const brands = await productModel.aggregate([
         {
             $group: {
@@ -195,11 +208,10 @@ export const getAllBrands = asyncHandler(async (req, res, next) => {
     });
 });
 
-
 export const deleteProduct = (async (req, res, next) => {
+    await connectToDB();
     const { id } = req.body;
     const product = await productModel.deleteOne({ _id: id });
     res.status(200).json({ msg: "success", product });
 })
-
 
