@@ -4,6 +4,8 @@ const router = Router();
 
 router.get('/', WC.getWishlist)
 router.post('/addToWishList', WC.addToWishList)
+router.patch('/removeFromWishList', WC.removeFromWishList)
+router.patch('/emptyWishList', WC.emptyWishList)
 
 
 

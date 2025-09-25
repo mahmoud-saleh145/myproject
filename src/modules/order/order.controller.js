@@ -10,6 +10,12 @@ import { calculateShipping } from '../../utils/shippingCalculator.js';
 import { generateRandomCode, orderCounter } from '../../utils/counterHelper.js';
 import connectToDB from '../../../db/connectionDB.js';
 
+export const getOrders = asyncHandler(async (req, res, next) => {
+    await connectToDB();
+    const orders = await orderModel.find();
+    res.status(200).json({ msg: "success", orders: orders })
+})
+
 export const createOrder = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const emailRegex = /^[A-Za-z0-9._%+-]{2,}@[A-Za-z0-9.-]+\.(com)$/;
@@ -105,13 +111,6 @@ export const createOrder = asyncHandler(async (req, res, next) => {
     await sendEmail(order.email, `Order #${order.randomId} Confirmed`, html);
     res.status(201).json({ msg: "Order created successfully", order });
 });
-
-
-export const getOrders = asyncHandler(async (req, res, next) => {
-    await connectToDB();
-    const orders = await orderModel.find();
-    res.status(200).json({ msg: "success", orders: orders })
-})
 
 export const getOrderByRandomId = asyncHandler(async (req, res, next) => {
     await connectToDB();

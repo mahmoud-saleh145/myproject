@@ -5,7 +5,7 @@ const router = Router();
 
 router.get('/', UC.getUsers)
 router.post('/addUser', UC.addUser)
-router.get('/getUserInfo', UC.getUserInfo)
+router.post('/getUserInfo', UC.getUserInfo)
 
 
 
