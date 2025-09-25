@@ -9,7 +9,7 @@ import cookieParser from "cookie-parser";
 import { attachSession } from "./src/middleware/session.middleware.js";
 import { AppError } from './src/utils/classError.js';
 import dotenv from "dotenv";
-
+import cors from "cors";
 dotenv.config();
 const port = process.env.PORT || 3001;
 const app = express();
@@ -19,6 +19,7 @@ connectionDB()
 app.use(express.json());
 app.use(cookieParser());
 app.use(attachSession);
+app.use(cors({ origin: "*" }));
 
 app.get("/", (req, res) => {
     res.json({ msg: "Hello" })
