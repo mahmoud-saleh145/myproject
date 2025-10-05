@@ -40,6 +40,13 @@ const productSchema = new Schema({
             },
         }
     ],
+    color: [
+        {
+            type: String,
+            _id: false,
+        }
+    ],
+
     brand: {
         type: String,
         trim: true

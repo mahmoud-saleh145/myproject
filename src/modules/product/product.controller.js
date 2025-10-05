@@ -37,6 +37,16 @@ export const getProducts = asyncHandler(async (req, res, next) => {
 });
 
 
+export const getProductDetails = asyncHandler(async (req, res, next) => {
+    await connectToDB();
+    const { id } = req.query;
+    const product = await productModel.findById(id);
+    if (!product) {
+        return next(new AppError("Product not found", 404));
+    }
+    res.status(200).json({ msg: "success", product });
+})
+
 
 const uploadToCloudinary = async (file) => {
     return new Promise((resolve, reject) => {
@@ -55,9 +65,9 @@ const uploadToCloudinary = async (file) => {
 export const addProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { name, price, description, category, stock, brand, discount } = req.body;
+    const { name, price, description, category, stock, brand, discount, color } = req.body;
 
-    if (!name || !price || !description || !category || !stock) {
+    if (!name || !price || !description || !category || !stock || !brand || !color) {
         return next(new AppError('Please provide all required fields', 400));
     }
 
@@ -78,7 +88,8 @@ export const addProduct = asyncHandler(async (req, res, next) => {
         brand,
         discount,
         raise: 0,
-        hide: false
+        hide: false,
+        color: Array.isArray(color) ? color : [color]
     });
     await product.save();
     res.status(201).json({ msg: 'success', product });
@@ -86,8 +97,8 @@ export const addProduct = asyncHandler(async (req, res, next) => {
 
 export const updateProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { id, name, price, description, category, stock, brand, discount, raise, hide } = req.body;
 
+    const { id, name, price, description, category, stock, brand, discount, raise, hide, color } = req.body;
     let images = [];
     if (req.files && req.files.length > 0) {
         for (const file of req.files) {
@@ -96,7 +107,7 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
         }
     }
 
-    const updateData = { name, price, description, category, stock, brand, discount, raise, hide };
+    const updateData = { name, price, description, category, stock, brand, discount, raise, hide, color: color ? (Array.isArray(color) ? color : [color]) : undefined };
     if (images.length > 0) updateData.image = images;
 
     const product = await productModel.updateOne({ _id: id }, updateData);
@@ -130,7 +141,7 @@ export const updateManyProductCategory = asyncHandler(async (req, res, next) => 
 export const getBrand = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { brand } = req.body;
+    const { brand } = req.query;
     if (!brand) {
         return next(new AppError("Please provide a brand name", 400));
     }
@@ -147,7 +158,7 @@ export const getBrand = asyncHandler(async (req, res, next) => {
 
 export const getCategory = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { category } = req.body;
+    const { category } = req.query;
     if (!category) {
         return next(new AppError("Please provide a category name", 400));
     }

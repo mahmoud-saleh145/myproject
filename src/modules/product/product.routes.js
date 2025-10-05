@@ -8,6 +8,7 @@ const upload = process.env.NODE_ENV === "production" ? multerStorageOnline() : m
 
 
 router.get('/', PC.getProducts)
+router.get('/getProductDetails', PC.getProductDetails);
 router.get('/getBrand', PC.getBrand)
 router.get('/getAllBrands', PC.getAllBrands)
 router.get('/getCategory', PC.getCategory)
