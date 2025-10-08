@@ -16,7 +16,7 @@ export const addToCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const sessionId = req.cookies.sessionId;
     const userId = req.body.userId;
-    const { productId, quantity } = req.body;
+    const { productId, quantity = 1 } = req.body;
 
     const product = await productModel.findById(productId);
     if (!product) {
