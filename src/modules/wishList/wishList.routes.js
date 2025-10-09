@@ -3,8 +3,8 @@ import * as WC from './wishList.controller.js';
 const router = Router();
 
 router.get('/', WC.getWishlist)
-router.post('/addToWishList', WC.addToWishList)
-router.patch('/removeFromWishList', WC.removeFromWishList)
+router.post('/toggleWishList', WC.toggleWishList)
+
 router.patch('/emptyWishList', WC.emptyWishList)
 
 
