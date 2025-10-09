@@ -34,26 +34,22 @@ export const getWishlist = asyncHandler(async (req, res, next) => {
 
 export const toggleWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
-
     const sessionId = req.cookies.sessionId;
     const userId = req.body.userId;
     const { productId } = req.body;
 
-    if (!productId) {
-        return next(new AppError("Please provide productId", 400));
-    }
+    if (!productId) return next(new AppError("Please provide productId", 400));
 
     const product = await productModel.findById(productId);
-    if (!product) {
-        return next(new AppError("No product found with this ID", 404));
-    }
+    if (!product) return next(new AppError("No product found with this ID", 404));
 
     let user;
 
     if (userId) {
         user = await userModel.findById(userId);
-        if (!user) return next(new AppError("No user found with this ID", 404));
+        if (!user) return next(new AppError("User not found", 404));
     } else {
+        // لو شغال بسيشن
         user = await userModel.findOne({ sessionId });
         if (!user) {
             user = new userModel({ sessionId, wishList: [] });
@@ -69,29 +65,29 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
     );
 
     let msg;
+    let added;
 
     if (itemIndex > -1) {
-
+        // المنتج موجود ⇒ احذفه
         user.wishList.splice(itemIndex, 1);
         msg = "Item removed from wishlist";
+        added = false;
     } else {
-
+        // المنتج مش موجود ⇒ ضيفه
         user.wishList.push({ product: productId });
         msg = "Item added to wishlist";
+        added = true;
     }
 
     await user.save();
 
-
-    const updatedUser = await userModel
-        .findById(user._id)
-        .populate("wishList.product");
-
     res.status(200).json({
         msg,
-        wishList: updatedUser.wishList,
+        added, // ← دي أهم حاجة للفرونت
+        wishList: user.wishList,
     });
 });
+
 
 
 export const emptyWishList = asyncHandler(async (req, res, next) => {
