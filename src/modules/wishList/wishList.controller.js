@@ -7,119 +7,122 @@ import userModel from './../../../db/models/user.model.js';
 
 export const getWishlist = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { email } = req.body;
-    if (!email) {
-        return next(new AppError("please provide email", 404));
+
+    const sessionId = req.cookies.sessionId;
+    const userId = req.body.userId;
+
+    let user;
+
+    if (userId) {
+        user = await userModel.findById(userId).populate("wishList.product");
+        if (!user) return next(new AppError("No user found with this ID", 404));
+    } else if (sessionId) {
+        user = await userModel.findOne({ sessionId }).populate("wishList.product");
+        if (!user) {
+            // لو الزائر لسه جديد، نرجع ليست فاضية
+            return res.status(200).json({ msg: "success", wishList: [] });
+        }
+    } else {
+        return next(new AppError("No user or session found", 400));
     }
-    const user = await userModel.findOne({ email: email }).populate("wishList.product");
-    if (!user) {
-        return next(new AppError("No user found with this email", 404));
-    }
-    res.status(200).json({ msg: "success", wishList: user.wishList });
+
+    res.status(200).json({
+        msg: "success",
+        wishList: user.wishList || [],
+    });
 });
 
-export const addToWishList = asyncHandler(async (req, res, next) => {
+export const toggleWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { productID, email } = req.body;
 
-    if (!productID) {
-        return next(new AppError("Please provide productID", 400));
-    }
-    if (!email) {
-        return next(new AppError("please provide email", 404));
-    }
+    const sessionId = req.cookies.sessionId;
+    const userId = req.body.userId;
+    const { productId } = req.body;
 
-    const [product, user] = await Promise.all([
-        productModel.findById(productID),
-        userModel.findOne({ email })
-    ]);
-
-    if (!product) {
-        return next(new AppError("No product found with this ID", 400));
+    if (!productId) {
+        return next(new AppError("Please provide productId", 400));
     }
 
-    if (!user) {
-        return next(new AppError("No user found with this email", 400));
-    }
-
-    const alreadyInWishList = user.wishList.find(
-        item => item.product.toString() === productID
-    );
-
-    if (alreadyInWishList) {
-        return next(new AppError("Product already in wishlist", 400));
-    }
-
-    const updatedUser = await userModel.findOneAndUpdate(
-        { email },
-        { $addToSet: { wishList: { product: productID } } },
-        { new: true }
-    ).populate("wishList.product");
-
-    await user.save();
-    res.status(201).json({ msg: "success", wishList: updatedUser.wishList });
-})
-
-export const removeFromWishList = asyncHandler(async (req, res, next) => {
-    await connectToDB();
-    const { productID, email } = req.body;
-
-    if (!productID) {
-        return next(new AppError("Please provide productID", 400));
-    }
-    if (!email) {
-        return next(new AppError("Please provide email", 400));
-    }
-
-    const [product, user] = await Promise.all([
-        productModel.findById(productID),
-        userModel.findOne({ email })
-    ]);
-
+    const product = await productModel.findById(productId);
     if (!product) {
         return next(new AppError("No product found with this ID", 404));
     }
-    if (!user) {
-        return next(new AppError("No user found with this email", 404));
+
+    let user;
+
+    if (userId) {
+        user = await userModel.findById(userId);
+        if (!user) return next(new AppError("No user found with this ID", 404));
+    } else {
+        user = await userModel.findOne({ sessionId });
+        if (!user) {
+            user = new userModel({ sessionId, wishList: [] });
+        }
+    }
+
+    if (!Array.isArray(user.wishList)) {
+        user.wishList = [];
     }
 
     const itemIndex = user.wishList.findIndex(
-        (item) => item.product.toString() === productID.toString()
+        (item) => item.product.toString() === productId.toString()
     );
 
-    if (itemIndex === -1) {
-        return next(new AppError("Item not found in wishlist", 400));
+    let msg;
+
+    if (itemIndex > -1) {
+
+        user.wishList.splice(itemIndex, 1);
+        msg = "Item removed from wishlist";
+    } else {
+
+        user.wishList.push({ product: productId });
+        msg = "Item added to wishlist";
     }
 
-    const updatedUser = await userModel
-        .findOneAndUpdate(
-            { email },
-            { $pull: { wishList: { product: productID } } },
-            { new: true }
-        )
-        .populate("wishList.product", "name price image");
+    await user.save();
 
-    res.status(200).json({ msg: "success", wishList: updatedUser.wishList });
+
+    const updatedUser = await userModel
+        .findById(user._id)
+        .populate("wishList.product");
+
+    res.status(200).json({
+        msg,
+        wishList: updatedUser.wishList,
+    });
 });
+
 
 export const emptyWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { email } = req.body;
-    if (!email) {
-        return next(new AppError("please provide email", 400));
+
+    const sessionId = req.cookies.sessionId;
+    const userId = req.body.userId;
+
+    if (!userId && !sessionId) {
+        return next(new AppError("User ID or session ID is required", 400));
     }
-    const user = await userModel.findOneAndUpdate(
-        { email },
-        { $set: { wishList: [] } },
-        { new: true }
-    )
+
+    let user;
+
+    if (userId) {
+        user = await userModel.findByIdAndUpdate(
+            userId,
+            { $set: { wishList: [] } },
+            { new: true }
+        );
+    } else {
+        user = await userModel.findOneAndUpdate(
+            { sessionId },
+            { $set: { wishList: [] } },
+            { new: true }
+        );
+    }
 
     if (!user) {
-        return next(new AppError("No user found with this email", 400));
+        return next(new AppError("User not found", 404));
     }
 
-
-    user.wishList = [];
-    await user.save();
     res.status(200).json({ msg: "success", wishList: user.wishList });
-})
+});

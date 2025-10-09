@@ -1,6 +1,9 @@
 import { Schema, model } from "mongoose";
 
 const userSchema = new Schema({
+    sessionId: {
+        type: String
+    },
     email: {
         type: String,
         unique: true
