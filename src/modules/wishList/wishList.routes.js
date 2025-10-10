@@ -4,10 +4,6 @@ const router = Router();
 
 router.get('/', WC.getWishlist)
 router.post('/toggleWishList', WC.toggleWishList)
-
+router.post('/mergeWishLists', WC.mergeWishLists)
 router.patch('/emptyWishList', WC.emptyWishList)
-
-
-
-
 export default router;

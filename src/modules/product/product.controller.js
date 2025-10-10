@@ -76,7 +76,7 @@ export const addProduct = asyncHandler(async (req, res, next) => {
     }
 
     const uploadResults = await Promise.all(req.files.map(file => uploadToCloudinary(file)));
-    const images = uploadResults.map(res => ({ original: res.secure_url }));
+    const images = uploadResults.map(res => ({ url: res.secure_url }));
 
     const product = new productModel({
         name,
@@ -103,7 +103,7 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
     if (req.files && req.files.length > 0) {
         for (const file of req.files) {
             const uploadResult = await cloudinary.uploader.upload(file.path, { folder: "products" });
-            images.push({ original: uploadResult.secure_url });
+            images.push({ url: uploadResult.secure_url });
         }
     }
 

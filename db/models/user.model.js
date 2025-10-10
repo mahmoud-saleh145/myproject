@@ -38,14 +38,6 @@ const userSchema = new Schema({
         default: "",
         trim: true
     },
-    wishList: [{
-        _id: false,
-        product: {
-            type: Schema.Types.ObjectId,
-            ref: 'product',
-            trim: true
-        },
-    }],
     orders: [{
         _id: false,
         orderId: {

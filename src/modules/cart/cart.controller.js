@@ -3,7 +3,7 @@ import cartModel from "../../../db/models/cart.model.js";
 import { AppError } from "../../utils/classError.js";
 import { asyncHandler } from "../../utils/globalErrorHandling.js";
 import productModel from './../../../db/models/product.model.js';
-import mongoose from "mongoose";
+
 
 
 export const getCarts = asyncHandler(async (req, res, next) => {

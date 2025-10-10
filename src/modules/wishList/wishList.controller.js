@@ -1,36 +1,34 @@
 import connectToDB from '../../../db/connectionDB.js';
 import productModel from '../../../db/models/product.model.js';
+import wishListModel from '../../../db/models/wishlist.js';
 import { AppError } from '../../utils/classError.js';
 import { asyncHandler } from '../../utils/globalErrorHandling.js';
-import userModel from './../../../db/models/user.model.js';
 
 
 export const getWishlist = asyncHandler(async (req, res, next) => {
     await connectToDB();
-
     const sessionId = req.cookies.sessionId;
     const userId = req.body.userId;
 
-    let user;
+    let wishlist = await wishListModel
+        .findOne({
+            $or: [{ userId }, { sessionId }],
+        })
+        .populate("items.productId");
 
-    if (userId) {
-        user = await userModel.findById(userId).populate("wishList.product");
-        if (!user) return next(new AppError("No user found with this ID", 404));
-    } else if (sessionId) {
-        user = await userModel.findOne({ sessionId }).populate("wishList.product");
-        if (!user) {
-            // لو الزائر لسه جديد، نرجع ليست فاضية
-            return res.status(200).json({ msg: "success", wishList: [] });
-        }
-    } else {
-        return next(new AppError("No user or session found", 400));
+    if (!wishlist) {
+        return res.status(200).json({
+            msg: "success",
+            wishList: [],
+        });
     }
 
     res.status(200).json({
         msg: "success",
-        wishList: user.wishList || [],
+        wishList: wishlist,
     });
 });
+
 
 export const toggleWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
@@ -38,53 +36,53 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
     const userId = req.body.userId;
     const { productId } = req.body;
 
-    if (!productId) return next(new AppError("Please provide productId", 400));
+    if (!productId)
+        return next(new AppError("Please provide productId", 400));
+
 
     const product = await productModel.findById(productId);
-    if (!product) return next(new AppError("No product found with this ID", 404));
+    if (!product)
+        return next(new AppError("No product found with this ID", 404));
 
-    let user;
 
-    if (userId) {
-        user = await userModel.findById(userId);
-        if (!user) return next(new AppError("User not found", 404));
-    } else {
-        // لو شغال بسيشن
-        user = await userModel.findOne({ sessionId });
-        if (!user) {
-            user = new userModel({ sessionId, wishList: [] });
-        }
+    let wishlist = await wishListModel.findOne({
+        $or: [{ userId }, { sessionId }],
+    });
+
+    if (!wishlist) {
+        wishlist = new wishListModel({
+            sessionId,
+            userId: userId || null,
+            items: [],
+        });
     }
 
-    if (!Array.isArray(user.wishList)) {
-        user.wishList = [];
-    }
 
-    const itemIndex = user.wishList.findIndex(
-        (item) => item.product.toString() === productId.toString()
+    const itemIndex = wishlist.items.findIndex(
+        (item) => item.productId.toString() === productId.toString()
     );
 
     let msg;
     let added;
 
     if (itemIndex > -1) {
-        // المنتج موجود ⇒ احذفه
-        user.wishList.splice(itemIndex, 1);
+
+        wishlist.items.splice(itemIndex, 1);
         msg = "Item removed from wishlist";
         added = false;
     } else {
-        // المنتج مش موجود ⇒ ضيفه
-        user.wishList.push({ product: productId });
+
+        wishlist.items.push({ productId });
         msg = "Item added to wishlist";
         added = true;
     }
 
-    await user.save();
+    await wishlist.save();
 
     res.status(200).json({
         msg,
-        added, // ← دي أهم حاجة للفرونت
-        wishList: user.wishList,
+        added,
+        wishList: wishlist,
     });
 });
 
@@ -100,25 +98,84 @@ export const emptyWishList = asyncHandler(async (req, res, next) => {
         return next(new AppError("User ID or session ID is required", 400));
     }
 
-    let user;
 
-    if (userId) {
-        user = await userModel.findByIdAndUpdate(
-            userId,
-            { $set: { wishList: [] } },
-            { new: true }
-        );
-    } else {
-        user = await userModel.findOneAndUpdate(
-            { sessionId },
-            { $set: { wishList: [] } },
-            { new: true }
-        );
+    const wishlist = await wishListModel.findOne({
+        $or: [{ userId }, { sessionId }],
+    });
+
+
+    if (!wishlist) {
+
+        return res.status(200).json({ msg: "success", wishList: [] });
     }
+    if (wishlist.items.length === 0)
+        return res.status(200).json({ msg: "Already empty", wishList: [] });
 
-    if (!user) {
-        return next(new AppError("User not found", 404));
-    }
 
-    res.status(200).json({ msg: "success", wishList: user.wishList });
+    wishlist.items = [];
+    await wishlist.save();
+
+    res.status(200).json({
+        msg: "success",
+        wishList: [],
+    });
 });
+
+export const mergeWishLists = asyncHandler(async (req, res, next) => {
+    await connectToDB();
+
+    const sessionId = req.cookies.sessionId;
+    const userId = req.body.userId;
+
+    if (!sessionId || !userId) {
+        return next(new AppError("Session ID and User ID are required", 400));
+    }
+
+    const sessionWishlist = await wishListModel.findOne({ sessionId });
+
+    let userWishlist = await wishListModel.findOne({ userId });
+
+    if (!sessionWishlist && !userWishlist) {
+        return res.status(200).json({
+            msg: "No wishlists to merge",
+            wishList: [],
+        });
+    }
+
+    if (sessionWishlist && sessionWishlist.items.length === 0) {
+        await sessionWishlist.deleteOne();
+        return res.status(200).json({
+            msg: "Session wishlist was empty",
+            wishList: userWishlist?.items || [],
+        });
+    }
+
+    if (!userWishlist) {
+        userWishlist = new wishListModel({
+            userId,
+            items: sessionWishlist?.items || [],
+        });
+    } else if (sessionWishlist) {
+        const existingIds = new Set(
+            userWishlist.items.map((item) => item.productId.toString())
+        );
+
+        sessionWishlist.items.forEach((item) => {
+            if (!existingIds.has(item.productId.toString())) {
+                userWishlist.items.push({ productId: item.productId });
+            }
+        });
+    }
+
+    await userWishlist.save();
+
+    if (sessionWishlist) {
+        await sessionWishlist.deleteOne();
+    }
+
+    res.status(200).json({
+        msg: "Wishlist merged successfully",
+        wishList: userWishlist.items,
+    });
+});
+
