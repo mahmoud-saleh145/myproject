@@ -10,6 +10,7 @@ import { attachSession } from "./src/middleware/session.middleware.js";
 import { AppError } from './src/utils/classError.js';
 import dotenv from "dotenv";
 import cors from "cors";
+import { protectRoute } from './src/middleware/logedInUser.middleware.js';
 dotenv.config();
 const port = process.env.PORT || 3001;
 const app = express();
@@ -24,6 +25,7 @@ app.use(cors({
 }));
 
 app.use(attachSession);
+app.use(protectRoute);
 
 app.get("/", (req, res) => {
     res.json({ msg: "Hello" })

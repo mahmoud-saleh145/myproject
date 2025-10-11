@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken";
 import { asyncHandler } from './../../utils/globalErrorHandling.js';
 import { AppError } from './../../utils/classError.js';
 import orderModel from '../../../db/models/order.model.js';
@@ -10,6 +11,20 @@ import { calculateShipping } from '../../utils/shippingCalculator.js';
 import { generateRandomCode, orderCounter } from '../../utils/counterHelper.js';
 import connectToDB from '../../../db/connectionDB.js';
 
+const verifyToken = (req, next) => {
+    const token = req.cookies?.token;
+    if (!token) throw new AppError("Authentication token is missing", 401);
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        return decoded.id;
+    } catch (err) {
+        throw new AppError("Invalid or expired token", 401);
+    }
+};
+
+
+
 export const getOrders = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const orders = await orderModel.find();
@@ -20,7 +35,8 @@ export const createOrder = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const emailRegex = /^[A-Za-z0-9._%+-]{2,}@[A-Za-z0-9.-]+\.(com)$/;
     const sessionId = req.cookies.sessionId;
-    const { userId, email, firstName, lastName, address, phone, city, governorate } = req.body || {};
+    const userId = verifyToken(req, next);
+    const { email, firstName, lastName, address, phone, city, governorate } = req.body || {};
     if (!sessionId && !userId) {
         throw new AppError("Session or user not found", 400);
     }

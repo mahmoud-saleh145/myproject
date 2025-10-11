@@ -4,11 +4,12 @@ import wishListModel from '../../../db/models/wishlist.js';
 import { AppError } from '../../utils/classError.js';
 import { asyncHandler } from '../../utils/globalErrorHandling.js';
 
-
+// 🟢 GET WISHLIST
 export const getWishlist = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const sessionId = req.cookies.sessionId;
-    const userId = req.body.userId;
+
+    const sessionId = req.cookies?.sessionId;
+    const userId = req.user?._id; // ✅ من التوكن
 
     let wishlist = await wishListModel
         .findOne({
@@ -30,20 +31,20 @@ export const getWishlist = asyncHandler(async (req, res, next) => {
 });
 
 
+// 🟢 TOGGLE WISHLIST
 export const toggleWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const sessionId = req.cookies.sessionId;
-    const userId = req.body.userId;
+
+    const sessionId = req.cookies?.sessionId;
+    const userId = req.user?._id; // ✅ من التوكن
     const { productId } = req.body;
 
     if (!productId)
         return next(new AppError("Please provide productId", 400));
 
-
     const product = await productModel.findById(productId);
     if (!product)
         return next(new AppError("No product found with this ID", 404));
-
 
     let wishlist = await wishListModel.findOne({
         $or: [{ userId }, { sessionId }],
@@ -57,7 +58,6 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
         });
     }
 
-
     const itemIndex = wishlist.items.findIndex(
         (item) => item.productId.toString() === productId.toString()
     );
@@ -66,12 +66,10 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
     let added;
 
     if (itemIndex > -1) {
-
         wishlist.items.splice(itemIndex, 1);
         msg = "Item removed from wishlist";
         added = false;
     } else {
-
         wishlist.items.push({ productId });
         msg = "Item added to wishlist";
         added = true;
@@ -87,30 +85,27 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
 });
 
 
-
+// 🟢 EMPTY WISHLIST
 export const emptyWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const sessionId = req.cookies.sessionId;
-    const userId = req.body.userId;
+    const sessionId = req.cookies?.sessionId;
+    const userId = req.user?._id;
 
     if (!userId && !sessionId) {
         return next(new AppError("User ID or session ID is required", 400));
     }
 
-
     const wishlist = await wishListModel.findOne({
         $or: [{ userId }, { sessionId }],
     });
 
-
     if (!wishlist) {
-
         return res.status(200).json({ msg: "success", wishList: [] });
     }
+
     if (wishlist.items.length === 0)
         return res.status(200).json({ msg: "Already empty", wishList: [] });
-
 
     wishlist.items = [];
     await wishlist.save();
@@ -121,18 +116,19 @@ export const emptyWishList = asyncHandler(async (req, res, next) => {
     });
 });
 
+
+// 🟢 MERGE WISHLISTS
 export const mergeWishLists = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const sessionId = req.cookies.sessionId;
-    const userId = req.body.userId;
+    const sessionId = req.cookies?.sessionId;
+    const userId = req.user?._id;
 
     if (!sessionId || !userId) {
         return next(new AppError("Session ID and User ID are required", 400));
     }
 
     const sessionWishlist = await wishListModel.findOne({ sessionId });
-
     let userWishlist = await wishListModel.findOne({ userId });
 
     if (!sessionWishlist && !userWishlist) {
@@ -178,4 +174,3 @@ export const mergeWishLists = asyncHandler(async (req, res, next) => {
         wishList: userWishlist.items,
     });
 });
-

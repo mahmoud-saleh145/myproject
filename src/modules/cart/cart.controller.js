@@ -15,7 +15,7 @@ export const getCarts = asyncHandler(async (req, res, next) => {
 export const addToCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const sessionId = req.cookies.sessionId;
-    const userId = req.body.userId;
+    const userId = req.user?._id;
     const { productId, quantity = 1 } = req.body;
 
     const product = await productModel.findById(productId);
@@ -62,7 +62,7 @@ export const addToCart = asyncHandler(async (req, res, next) => {
 export const getCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const sessionId = req.cookies.sessionId;
-    const userId = req.user?._id || req.body.userId;
+    const userId = req.user?._id;
     let cart = null;
     if (userId) {
         cart = await cartModel.findOne({ userId }).populate("items.productId", "-createdAt -updatedAt -__v");
@@ -75,7 +75,7 @@ export const getCart = asyncHandler(async (req, res, next) => {
 export const mergeCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { userId } = req.body;
+    const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
     if (!userId) {
         return next(new AppError("User ID is required to merge carts", 400));
@@ -115,7 +115,8 @@ export const mergeCart = asyncHandler(async (req, res, next) => {
 export const addQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { productId, userId } = req.body;
+    const { productId } = req.body;
+    const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
     if (!sessionId && !userId) {
@@ -173,7 +174,8 @@ export const addQuantity = asyncHandler(async (req, res, next) => {
 export const reduceQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { productId, userId } = req.body;
+    const { productId } = req.body;
+    const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
     if (!sessionId && !userId) {
@@ -222,7 +224,7 @@ export const reduceQuantity = asyncHandler(async (req, res, next) => {
 export const emptyCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { userId } = req.body;
+    const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
     if (!sessionId && !userId) {
@@ -259,7 +261,8 @@ export const emptyCart = asyncHandler(async (req, res, next) => {
 export const removeProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { productId, userId } = req.body;
+    const { productId } = req.body;
+    const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
     if (!sessionId && !userId) {
