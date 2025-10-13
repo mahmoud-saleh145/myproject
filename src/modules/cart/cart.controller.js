@@ -44,7 +44,7 @@ export const addToCart = asyncHandler(async (req, res, next) => {
         cart.items = [];
     }
     const itemIndex = cart.items.findIndex(
-        (item) => item.productId._id.toString() === productId.toString()
+        (item) => item.productId.toString() === productId.toString()
     );
     if (itemIndex > -1) {
         cart.items[itemIndex].quantity += quantity;
