@@ -4,10 +4,10 @@ import * as UC from "./cart.controller.js";
 const router = Router();
 
 router.get('/', UC.getCarts)
+router.get("/getCart", UC.getCart);
 
 router.post("/addToCart", UC.addToCart);
 router.post("/mergeCart", UC.mergeCart);
-router.post("/getCart", UC.getCart);
 
 router.patch("/addQuantity", UC.addQuantity);
 router.patch("/reduceQuantity", UC.reduceQuantity);
