@@ -63,11 +63,14 @@ export const getCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const sessionId = req.cookies.sessionId;
     const userId = req.user?._id;
-    let cart = null;
-    if (userId) {
-        cart = await cartModel.findOne({ userId }).populate("items.productId", "-createdAt -updatedAt -__v");
-    } else if (sessionId) {
-        cart = await cartModel.findOne({ sessionId }).populate("items.productId");
+    let cart = await cartModel
+        .findOne({
+            $or: [{ userId }, { sessionId }],
+        })
+        .populate("items.productId");
+
+    if (!cart) {
+        cart = await cartModel.create({ sessionId, items: [] });
     }
     res.json(cart || { items: [] });
 });
