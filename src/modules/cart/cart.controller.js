@@ -16,7 +16,7 @@ export const addToCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const sessionId = req.cookies.sessionId;
     const userId = req.user?._id;
-    const { productId, quantity = 1 } = req.body;
+    const { productId, quantity = 1, color } = req.body;
 
     const product = await productModel.findById(productId);
     if (!product) {
@@ -44,12 +44,14 @@ export const addToCart = asyncHandler(async (req, res, next) => {
         cart.items = [];
     }
     const itemIndex = cart.items.findIndex(
-        (item) => item.productId.toString() === productId.toString()
+        (item) =>
+            item.productId.toString() === productId.toString() &&
+            item.color === color
     );
     if (itemIndex > -1) {
         cart.items[itemIndex].quantity += quantity;
     } else {
-        cart.items.push({ productId, quantity });
+        cart.items.push({ productId, quantity, color });
     }
 
     product.reserved += quantity;
