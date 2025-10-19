@@ -11,6 +11,7 @@ import { AppError } from './src/utils/classError.js';
 import dotenv from "dotenv";
 import cors from "cors";
 import { protectRoute } from './src/middleware/logedInUser.middleware.js';
+import sessionRouter from "./src/modules/session/session.routes.js";
 dotenv.config();
 const port = process.env.PORT || 3001;
 const app = express();
@@ -31,7 +32,7 @@ app.get("/", (req, res) => {
     res.json({ msg: "Hello" })
 })
 
-
+app.use("/session", sessionRouter);
 app.use("/product", productRouter)
 app.use("/user", userRouter)
 app.use("/cart", cartRouter)
