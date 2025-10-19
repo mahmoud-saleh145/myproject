@@ -21,7 +21,10 @@ connectionDB()
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: [
+        "http://localhost:3000",
+        "https://myproject-zeta-two.vercel.app"
+    ],
     credentials: true,
 }));
 

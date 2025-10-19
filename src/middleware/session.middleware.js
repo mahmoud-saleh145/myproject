@@ -1,40 +1,27 @@
 import { v4 as uuidv4 } from "uuid";
-import cookie from "cookie";
 
 export const attachSession = (req, res, next) => {
-    try {
-        const cookies = cookie.parse(req.headers.cookie || "");
-        let { sessionId } = cookies;
+    const isLocal =
+        req.hostname === "localhost" ||
+        req.hostname === "127.0.0.1" ||
+        req.headers.origin?.includes("localhost");
 
-        const host = req.headers.host || "";
-        const isLocal = host.includes("localhost") || host.includes("127.0.0.1");
+    if (!req.cookies.sessionId) {
+        const newSession = uuidv4();
 
-        if (!sessionId) {
-            sessionId = uuidv4();
+        res.cookie("sessionId", newSession, {
+            httpOnly: true,
+            maxAge: 1000 * 60 * 60 * 24 * 7,
+            secure: true,
+            sameSite: "none",
+            path: "/",
+        });
 
-            const cookieOptions = {
-                httpOnly: true,
-                maxAge: 1000 * 60 * 60 * 24 * 7,
-                sameSite: isLocal ? "lax" : "none",
-                secure: !isLocal,
-                path: "/",
-            };
-
-            res.setHeader(
-                "Set-Cookie",
-                cookie.serialize("sessionId", sessionId, cookieOptions)
-            );
-
-            console.log("🆕 New session created:", sessionId);
-        } else {
-            console.log("✅ Existing session found:", sessionId);
-        }
-
-        req.sessionId = sessionId;
-
-        next();
-    } catch (err) {
-        console.error("❌ Error in attachSession:", err);
-        next(err);
+        console.log("🟢 Created new sessionId:", newSession);
+        req.sessionId = newSession;
+    } else {
+        req.sessionId = req.cookies.sessionId;
     }
+
+    next();
 };
