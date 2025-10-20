@@ -12,8 +12,8 @@ export const attachSession = (req, res, next) => {
         res.cookie("sessionId", newSession, {
             httpOnly: true,
             maxAge: 1000 * 60 * 60 * 24 * 7,
-            secure: true,
-            sameSite: "none",
+            secure: !isLocal,
+            sameSite: isLocal ? "lax" : "none",
             path: "/",
         });
 
