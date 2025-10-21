@@ -4,13 +4,14 @@ import wishListModel from '../../../db/models/wishlist.js';
 import { AppError } from '../../utils/classError.js';
 import { asyncHandler } from '../../utils/globalErrorHandling.js';
 
-// 🟢 GET WISHLIST
+
 export const getWishlist = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
     const sessionId = req.cookies?.sessionId;
-    const userId = req.user?._id; // ✅ من التوكن
-
+    const userId = req.user?._id;
+    if (!sessionId && !userId)
+        return next(new AppError("Session or user not found", 400));
     let wishlist = await wishListModel
         .findOne({
             $or: [{ userId }, { sessionId }],
@@ -31,14 +32,16 @@ export const getWishlist = asyncHandler(async (req, res, next) => {
 });
 
 
-// 🟢 TOGGLE WISHLIST
+
 export const toggleWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
     const sessionId = req.cookies?.sessionId;
-    const userId = req.user?._id; // ✅ من التوكن
+    const userId = req.user?._id;
     const { productId } = req.body;
 
+    if (!sessionId && !userId)
+        return next(new AppError("Session or user not found", 400));
     if (!productId)
         return next(new AppError("Please provide productId", 400));
 
@@ -46,13 +49,14 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
     if (!product)
         return next(new AppError("No product found with this ID", 404));
 
+
     let wishlist = await wishListModel.findOne({
         $or: [{ userId }, { sessionId }],
     });
 
     if (!wishlist) {
         wishlist = new wishListModel({
-            sessionId,
+            sessionId: sessionId || undefined,
             userId: userId || null,
             items: [],
         });
@@ -85,7 +89,6 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
 });
 
 
-// 🟢 EMPTY WISHLIST
 export const emptyWishList = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
@@ -117,13 +120,14 @@ export const emptyWishList = asyncHandler(async (req, res, next) => {
 });
 
 
-// 🟢 MERGE WISHLISTS
+
 export const mergeWishLists = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
     const sessionId = req.cookies?.sessionId;
     const userId = req.user?._id;
-
+    if (!sessionId && !userId)
+        return next(new AppError("Session or user not found", 400));
     if (!sessionId || !userId) {
         return next(new AppError("Session ID and User ID are required", 400));
     }
@@ -174,3 +178,5 @@ export const mergeWishLists = asyncHandler(async (req, res, next) => {
         wishList: userWishlist.items,
     });
 });
+
+

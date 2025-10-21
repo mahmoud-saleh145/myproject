@@ -24,7 +24,12 @@ const orderSchema = new Schema({
             },
             price: {
                 type: Number,
-            }
+            },
+            color: {
+                type: String,
+                trim: true,
+                required: true,
+            },
         }
     ],
     shippingCost: {

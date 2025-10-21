@@ -21,15 +21,6 @@ const productSchema = new Schema({
         required: true,
         trim: true
     },
-    stock: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    reserved: {
-        type: Number,
-        default: 0
-    },
     image: [
         {
             _id: false,
@@ -40,10 +31,12 @@ const productSchema = new Schema({
             },
         }
     ],
-    color: [
+    colors: [
         {
-            type: String,
             _id: false,
+            color: { type: String, trim: true },
+            stock: { type: Number, min: 0 },
+            reserved: { type: Number, min: 0, default: 0 }
         }
     ],
 

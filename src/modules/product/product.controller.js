@@ -10,7 +10,6 @@ export const getProducts = asyncHandler(async (req, res, next) => {
     let page = Math.max(parseInt(req.body?.page) || 1, 1);
     let limit = Math.max(parseInt(req.body?.limit) || 10, 1);
     let skip = (page - 1) * limit;
-    // Search / Filter
     let query = {};
     if (req.body?.search) {
         const search = req.body.search;
@@ -22,9 +21,7 @@ export const getProducts = asyncHandler(async (req, res, next) => {
             ]
         };
     }
-    // Count total matching documents
     const total = await productModel.countDocuments(query);
-    // Get products with pagination
     const products = await productModel.find(query).skip(skip).limit(limit);
     res.status(200).json({
         msg: "success",
@@ -36,7 +33,6 @@ export const getProducts = asyncHandler(async (req, res, next) => {
     });
 });
 
-
 export const getProductDetails = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const { id } = req.query;
@@ -46,7 +42,6 @@ export const getProductDetails = asyncHandler(async (req, res, next) => {
     }
     res.status(200).json({ msg: "success", product });
 })
-
 
 const uploadToCloudinary = async (file) => {
     return new Promise((resolve, reject) => {
@@ -65,9 +60,9 @@ const uploadToCloudinary = async (file) => {
 export const addProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { name, price, description, category, stock, brand, discount, color } = req.body;
+    const { name, price, description, category, brand, discount, colors } = req.body;
 
-    if (!name || !price || !description || !category || !stock || !brand || !color) {
+    if (!name || !price || !description || !category || !colors || colors.length === 0 || !brand) {
         return next(new AppError('Please provide all required fields', 400));
     }
 
@@ -78,18 +73,24 @@ export const addProduct = asyncHandler(async (req, res, next) => {
     const uploadResults = await Promise.all(req.files.map(file => uploadToCloudinary(file)));
     const images = uploadResults.map(res => ({ url: res.secure_url }));
 
+    let parsedColors;
+    try {
+        parsedColors = typeof colors === "string" ? JSON.parse(colors) : colors;
+    } catch (e) {
+        return next(new AppError("Invalid colors format", 400));
+    }
+
     const product = new productModel({
         name,
         price,
         description,
         category,
-        stock,
         image: images,
         brand,
         discount,
         raise: 0,
         hide: false,
-        color: Array.isArray(color) ? color : [color]
+        colors: Array.isArray(parsedColors) ? parsedColors : [parsedColors],
     });
     await product.save();
     res.status(201).json({ msg: 'success', product });
@@ -98,7 +99,7 @@ export const addProduct = asyncHandler(async (req, res, next) => {
 export const updateProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { id, name, price, description, category, stock, brand, discount, raise, hide, color } = req.body;
+    const { id, name, price, description, category, brand, discount, raise, hide, colors } = req.body;
     let images = [];
     if (req.files && req.files.length > 0) {
         for (const file of req.files) {
@@ -106,8 +107,14 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
             images.push({ url: uploadResult.secure_url });
         }
     }
+    let parsedColors;
+    try {
+        parsedColors = typeof colors === "string" ? JSON.parse(colors) : colors;
+    } catch (e) {
+        return next(new AppError("Invalid colors format", 400));
+    }
 
-    const updateData = { name, price, description, category, stock, brand, discount, raise, hide, color: color ? (Array.isArray(color) ? color : [color]) : undefined };
+    const updateData = { name, price, description, category, brand, discount, raise, hide, colors: colors ? (Array.isArray(parsedColors) ? parsedColors : [parsedColors]) : undefined };
     if (images.length > 0) updateData.image = images;
 
     const product = await productModel.updateOne({ _id: id }, updateData);

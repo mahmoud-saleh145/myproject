@@ -15,6 +15,7 @@ const cartSchema = new Schema({
             productId: {
                 type: Schema.Types.ObjectId,
                 ref: 'product',
+                required: true,
             },
             quantity: {
                 type: Number,
@@ -23,6 +24,8 @@ const cartSchema = new Schema({
             },
             color: {
                 type: String,
+                required: true,
+                trim: true,
             }
         }
     ]

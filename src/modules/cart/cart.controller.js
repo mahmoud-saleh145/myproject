@@ -2,15 +2,14 @@ import connectToDB from "../../../db/connectionDB.js";
 import cartModel from "../../../db/models/cart.model.js";
 import { AppError } from "../../utils/classError.js";
 import { asyncHandler } from "../../utils/globalErrorHandling.js";
-import productModel from './../../../db/models/product.model.js';
-
+import productModel from "../../../db/models/product.model.js";
 
 
 export const getCarts = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const carts = await cartModel.find().populate("items.productId");
-    res.status(200).json({ msg: "success", carts: carts });
-})
+    res.status(200).json({ msg: "success", carts });
+});
 
 export const addToCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
@@ -18,239 +17,263 @@ export const addToCart = asyncHandler(async (req, res, next) => {
     const userId = req.user?._id;
     const { productId, quantity = 1, color } = req.body;
 
+    if (!sessionId && !userId) {
+        return next(new AppError("Session or user not found", 400));
+    }
+
     const product = await productModel.findById(productId);
-    if (!product) {
-        return next(new AppError("Product not found", 404));
-    }
-    if (product.stock < quantity) {
-        return next(new AppError("Not enough stock", 400));
+    if (!product) return next(new AppError("Product not found", 404));
+
+
+    const colorVariant = product.colors.find(c => c.color === color);
+    if (!colorVariant)
+        return next(new AppError("Selected color not found for this product", 400));
+
+    const available = colorVariant.stock - colorVariant.reserved;
+    if (available < quantity)
+        return next(new AppError("Not enough stock for this color", 400));
+
+    let cart = userId
+        ? await cartModel.findOne({ userId })
+        : await cartModel.findOne({ sessionId });
+
+    if (!cart) {
+        cart = new cartModel({
+            userId: userId || undefined,
+            sessionId: sessionId || undefined,
+            items: [],
+        });
     }
 
-    let cart;
 
-    if (userId) {
-        cart = await cartModel.findOne({ userId });
-        if (!cart) {
-            cart = new cartModel({ userId, items: [] });
-        }
-    } else {
-        cart = await cartModel.findOne({ sessionId });
-        if (!cart) {
-            cart = new cartModel({ sessionId, items: [] });
-        }
-    }
-
-    if (!Array.isArray(cart.items)) {
-        cart.items = [];
-    }
     const itemIndex = cart.items.findIndex(
-        (item) =>
+        item =>
             item.productId.toString() === productId.toString() &&
             item.color === color
     );
+
     if (itemIndex > -1) {
         cart.items[itemIndex].quantity += quantity;
     } else {
         cart.items.push({ productId, quantity, color });
     }
 
-    product.reserved += quantity;
+
+    colorVariant.reserved += quantity;
+
     await cart.save();
     await product.save();
-    res.json({ message: "Item added to cart", cart });
 
-})
+    res.json({ message: "Item added to cart", cart });
+});
 
 export const getCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
     const sessionId = req.cookies.sessionId;
     const userId = req.user?._id;
+    if (!sessionId && !userId)
+        return next(new AppError("Session or user not found", 400));
+
     let cart = await cartModel
         .findOne({
             $or: [{ userId }, { sessionId }],
         })
         .populate("items.productId");
 
-    if (!cart) {
+    if (!cart && sessionId) {
         cart = await cartModel.create({ sessionId, items: [] });
     }
+
     res.json(cart || { items: [] });
 });
 
 export const mergeCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
+    const sessionId = req.cookies?.sessionId;
     const userId = req.user?._id;
-    const sessionId = req.cookies.sessionId;
-    if (!userId) {
-        return next(new AppError("User ID is required to merge carts", 400));
-    }
-    let guestCart = await cartModel.findOne({ sessionId });
-    let userCart = await cartModel.findOne({ userId });
 
-    if (guestCart) {
-        if (!userCart) {
-            guestCart.userId = userId;
-            guestCart.sessionId = null;
-            await guestCart.save();
-            return res.json({ message: "Guest cart assigned to user", cart: guestCart });
+    if (!sessionId || !userId) {
+        return next(new AppError("Session ID and User ID are required", 400));
+    }
+
+    const sessionCart = await cartModel.findOne({ sessionId }).populate("items.productId");
+    const userCart = await cartModel.findOne({ userId }).populate("items.productId");
+
+    if (!sessionCart && !userCart) {
+        return res.status(200).json({ msg: "No carts to merge", cart: [] });
+    }
+
+    if (sessionCart && sessionCart.items.length === 0) {
+        sessionCart.userId = userId;
+        sessionCart.sessionId = null;
+        await sessionCart.save();
+        return res.status(200).json({
+            msg: "Session cart was empty, assigned to user",
+            cart: sessionCart.items,
+        });
+    }
+
+
+    if (!userCart) {
+        sessionCart.userId = userId;
+        sessionCart.sessionId = null;
+        await sessionCart.save();
+        return res.status(200).json({
+            msg: "Cart merged successfully (session cart assigned to user)",
+            cart: sessionCart.items,
+        });
+    }
+
+
+    for (const item of sessionCart.items) {
+        const { productId, quantity, color } = item;
+
+        const existingItem = userCart.items.find(
+            (i) =>
+                i.productId.toString() === productId._id.toString() &&
+                i.color === color
+        );
+
+        const product = await productModel.findById(productId);
+        if (!product || product.stock < quantity) continue;
+
+        if (existingItem) {
+            const newQuantity = existingItem.quantity + quantity;
+            existingItem.quantity = Math.min(newQuantity, product.stock);
+        } else {
+            userCart.items.push({
+                productId: productId._id,
+                quantity: Math.min(quantity, product.stock),
+                color
+            });
         }
 
-        guestCart.items.forEach((gItem) => {
-            const idx = userCart.items.findIndex(
-                (uItem) => uItem.productId.toString() === gItem.productId.toString()
-            );
-            if (idx > -1) {
-                userCart.items[idx].quantity += gItem.quantity;
-            } else {
-                userCart.items.push(gItem);
-            }
+        await productModel.findByIdAndUpdate(productId, {
+            $inc: { reserved: -quantity }
         });
-
-        await userCart.save();
-        await cartModel.deleteOne({ _id: guestCart._id });
-
-        return res.json({ message: "Carts merged", cart: userCart });
     }
 
-    res.json({ message: "No guest cart found" });
+    await userCart.save();
+    await sessionCart.deleteOne();
 
-})
+    res.status(200).json({
+        msg: "Cart merged successfully",
+        cart: userCart.items,
+    });
+});
 
 export const addQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
-
-    const { productId } = req.body;
+    const { productId, color } = req.body;
     const userId = req.user?._id;
-    const sessionId = req.cookies.sessionId;
+    const sessionId = req.cookies.sessionId || req.body.sessionId;
 
     if (!sessionId && !userId) {
         return next(new AppError("Session or user not found", 400));
     }
 
     const product = await productModel.findById(productId);
-    if (!product) {
-        return next(new AppError("Product not found", 404));
-    }
-    if (product.stock < 1) {
+    if (!product) return next(new AppError("Product not found", 404));
 
-        return next(new AppError("Not enough stock", 400));
+    const colorVariant = product.colors.find(c => c.color === color);
+    if (!colorVariant)
+        return next(new AppError("Selected color not found", 400));
 
-    }
-    let cart;
+    const available = colorVariant.stock - colorVariant.reserved;
+    if (available < 1)
+        return next(new AppError("Not enough stock for this color", 400));
 
-    if (userId) {
-        cart = await cartModel.findOne({ userId });
-    } else {
-        cart = await cartModel.findOne({ sessionId });
-    }
+    let cart = userId
+        ? await cartModel.findOne({ userId })
+        : await cartModel.findOne({ sessionId });
 
-    if (!cart) {
-        return next(new AppError("Cart not found", 404));
-    }
+    if (!cart) return next(new AppError("Cart not found", 404));
 
     const itemIndex = cart.items.findIndex(
-        (item) => item.productId.toString() === productId.toString()
+        item =>
+            item.productId.toString() === productId.toString() &&
+            item.color === color
     );
 
-
-    if (itemIndex > -1) {
-
-
-        if (product.stock < 1) {
-            return next(new AppError("Not enough stock", 400));
-        }
-
-        cart.items[itemIndex].quantity += 1;
-
-
-        product.stock -= 1;
-
-        await product.save();
-        await cart.save();
-        res.status(200).json({ msg: "success", cart });
-    } else {
+    if (itemIndex === -1)
         return next(new AppError("Item not found in cart", 404));
-    }
 
+    cart.items[itemIndex].quantity += 1;
+    colorVariant.reserved += 1;
 
-})
+    await product.save();
+    await cart.save();
+
+    res.status(200).json({ msg: "success", cart });
+});
 
 export const reduceQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
-
-    const { productId } = req.body;
+    const { productId, color } = req.body;
     const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
-    if (!sessionId && !userId) {
+    if (!sessionId && !userId)
         return next(new AppError("Session or user not found", 400));
-    }
 
     const product = await productModel.findById(productId);
-    if (!product) {
-        return next(new AppError("Product not found", 404));
-    }
+    if (!product) return next(new AppError("Product not found", 404));
 
-    let cart;
-    if (userId) {
-        cart = await cartModel.findOne({ userId });
-    } else {
-        cart = await cartModel.findOne({ sessionId });
-    }
+    const colorVariant = product.colors.find(c => c.color === color);
+    if (!colorVariant)
+        return next(new AppError("Selected color not found", 400));
 
-    if (!cart) {
-        return next(new AppError("Cart not found", 404));
-    }
+    let cart = userId
+        ? await cartModel.findOne({ userId })
+        : await cartModel.findOne({ sessionId });
+
+    if (!cart) return next(new AppError("Cart not found", 404));
 
     const itemIndex = cart.items.findIndex(
-        (item) => item.productId.toString() === productId.toString()
+        item =>
+            item.productId.toString() === productId.toString() &&
+            item.color === color
     );
 
-    if (itemIndex > -1) {
-        cart.items[itemIndex].quantity -= 1;
-
-
-        if (cart.items[itemIndex].quantity <= 0) {
-            cart.items.splice(itemIndex, 1);
-        }
-
-        product.stock += 1;
-
-        await product.save();
-        await cart.save();
-
-        return res.status(200).json({ msg: "success", cart });
-    } else {
+    if (itemIndex === -1)
         return next(new AppError("Item not found in cart", 404));
+
+    cart.items[itemIndex].quantity -= 1;
+    colorVariant.reserved -= 1;
+
+    if (cart.items[itemIndex].quantity <= 0) {
+        cart.items.splice(itemIndex, 1);
     }
-})
+
+    await product.save();
+    await cart.save();
+
+    res.status(200).json({ msg: "success", cart });
+});
 
 export const emptyCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
-
     const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
-    if (!sessionId && !userId) {
+    if (!sessionId && !userId)
         return next(new AppError("Session or user not found", 400));
-    }
 
-    let cart;
-    if (userId) {
-        cart = await cartModel.findOne({ userId });
-    } else {
-        cart = await cartModel.findOne({ sessionId });
-    }
+    let cart = userId
+        ? await cartModel.findOne({ userId })
+        : await cartModel.findOne({ sessionId });
 
-    if (!cart) {
-        return next(new AppError("Cart not found", 404));
-    }
+    if (!cart) return next(new AppError("Cart not found", 404));
 
-    for (let item of cart.items) {
+    for (const item of cart.items) {
         const product = await productModel.findById(item.productId);
-        if (product) {
-            product.stock += item.quantity;
+        if (!product) continue;
+
+        const colorVariant = product.colors.find(c => c.color === item.color);
+        if (colorVariant) {
+            colorVariant.reserved -= item.quantity;
+            if (colorVariant.reserved < 0) colorVariant.reserved = 0;
             await product.save();
         }
     }
@@ -258,55 +281,47 @@ export const emptyCart = asyncHandler(async (req, res, next) => {
     cart.items = [];
     await cart.save();
 
-    res.status(200).json({ msg: "success", message: "Cart emptied successfully", cart });
-
-
-})
+    res.status(200).json({ msg: "success", message: "Cart emptied", cart });
+});
 
 export const removeProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
-
-    const { productId } = req.body;
+    const { productId, color } = req.body;
     const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
-    if (!sessionId && !userId) {
+    if (!sessionId && !userId)
         return next(new AppError("Session or user not found", 400));
-    }
 
-    let cart;
-    if (userId) {
-        cart = await cartModel.findOne({ userId });
-    } else {
-        cart = await cartModel.findOne({ sessionId });
-    }
+    let cart = userId
+        ? await cartModel.findOne({ userId })
+        : await cartModel.findOne({ sessionId });
 
-    if (!cart) {
-        return next(new AppError("Cart not found", 404));
-    }
+    if (!cart) return next(new AppError("Cart not found", 404));
 
     const product = await productModel.findById(productId);
-    if (!product) {
-        return next(new AppError("Product not found", 404));
-    }
+    if (!product) return next(new AppError("Product not found", 404));
 
     const itemIndex = cart.items.findIndex(
-        (item) => item.productId.toString() === productId.toString()
+        item =>
+            item.productId.toString() === productId.toString() &&
+            item.color === color
     );
 
-    if (itemIndex === -1) {
+    if (itemIndex === -1)
         return next(new AppError("Item not found in cart", 404));
+
+    const item = cart.items[itemIndex];
+    const colorVariant = product.colors.find(c => c.color === color);
+    if (colorVariant) {
+        colorVariant.reserved -= item.quantity;
+        if (colorVariant.reserved < 0) colorVariant.reserved = 0;
     }
 
-    product.stock += cart.items[itemIndex].quantity;
-    await product.save();
-
     cart.items.splice(itemIndex, 1);
+
+    await product.save();
     await cart.save();
 
-    res.status(200).json({ msg: "success", message: "Product removed from cart", cart });
-
-
-})
-
-
+    res.status(200).json({ msg: "success", message: "Product removed", cart });
+});
