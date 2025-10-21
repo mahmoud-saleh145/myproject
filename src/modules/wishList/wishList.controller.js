@@ -120,7 +120,6 @@ export const emptyWishList = asyncHandler(async (req, res, next) => {
 });
 
 
-
 export const mergeWishLists = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
