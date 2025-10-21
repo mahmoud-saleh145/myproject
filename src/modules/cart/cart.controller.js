@@ -165,7 +165,7 @@ export const mergeCart = asyncHandler(async (req, res, next) => {
 
 export const addQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { productId, color } = req.body;
+    const { productId } = req.body;
     const userId = req.user?._id;
     const sessionId = req.cookies.sessionId || req.body.sessionId;
 
@@ -176,6 +176,22 @@ export const addQuantity = asyncHandler(async (req, res, next) => {
     const product = await productModel.findById(productId);
     if (!product) return next(new AppError("Product not found", 404));
 
+    let cart = userId
+        ? await cartModel.findOne({ userId })
+        : await cartModel.findOne({ sessionId });
+
+    if (!cart) return next(new AppError("Cart not found", 404));
+
+    // ✅ نجيب اللون من الكارت مباشرة
+    const itemIndex = cart.items.findIndex(
+        item => item.productId.toString() === productId.toString()
+    );
+
+    if (itemIndex === -1)
+        return next(new AppError("Item not found in cart", 404));
+
+    const color = cart.items[itemIndex].color;
+
     const colorVariant = product.colors.find(c => c.color === color);
     if (!colorVariant)
         return next(new AppError("Selected color not found", 400));
@@ -183,21 +199,6 @@ export const addQuantity = asyncHandler(async (req, res, next) => {
     const available = colorVariant.stock - colorVariant.reserved;
     if (available < 1)
         return next(new AppError("Not enough stock for this color", 400));
-
-    let cart = userId
-        ? await cartModel.findOne({ userId })
-        : await cartModel.findOne({ sessionId });
-
-    if (!cart) return next(new AppError("Cart not found", 404));
-
-    const itemIndex = cart.items.findIndex(
-        item =>
-            item.productId.toString() === productId.toString() &&
-            item.color === color
-    );
-
-    if (itemIndex === -1)
-        return next(new AppError("Item not found in cart", 404));
 
     cart.items[itemIndex].quantity += 1;
     colorVariant.reserved += 1;
@@ -208,9 +209,10 @@ export const addQuantity = asyncHandler(async (req, res, next) => {
     res.status(200).json({ msg: "success", cart });
 });
 
+
 export const reduceQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { productId, color } = req.body;
+    const { productId } = req.body;
     const userId = req.user?._id;
     const sessionId = req.cookies.sessionId;
 
@@ -220,10 +222,6 @@ export const reduceQuantity = asyncHandler(async (req, res, next) => {
     const product = await productModel.findById(productId);
     if (!product) return next(new AppError("Product not found", 404));
 
-    const colorVariant = product.colors.find(c => c.color === color);
-    if (!colorVariant)
-        return next(new AppError("Selected color not found", 400));
-
     let cart = userId
         ? await cartModel.findOne({ userId })
         : await cartModel.findOne({ sessionId });
@@ -231,13 +229,18 @@ export const reduceQuantity = asyncHandler(async (req, res, next) => {
     if (!cart) return next(new AppError("Cart not found", 404));
 
     const itemIndex = cart.items.findIndex(
-        item =>
-            item.productId.toString() === productId.toString() &&
-            item.color === color
+        item => item.productId.toString() === productId.toString()
     );
 
     if (itemIndex === -1)
         return next(new AppError("Item not found in cart", 404));
+
+    // ✅ نجيب اللون من الكارت
+    const color = cart.items[itemIndex].color;
+    const colorVariant = product.colors.find(c => c.color === color);
+
+    if (!colorVariant)
+        return next(new AppError("Selected color not found", 400));
 
     cart.items[itemIndex].quantity -= 1;
     colorVariant.reserved -= 1;
@@ -251,6 +254,7 @@ export const reduceQuantity = asyncHandler(async (req, res, next) => {
 
     res.status(200).json({ msg: "success", cart });
 });
+
 
 export const emptyCart = asyncHandler(async (req, res, next) => {
     await connectToDB();
