@@ -165,7 +165,7 @@ export const mergeCart = asyncHandler(async (req, res, next) => {
 
 export const addQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { productId } = req.body;
+    const { productId, color } = req.body;
     const userId = req.user?._id;
     const sessionId = req.cookies.sessionId || req.body.sessionId;
 
@@ -182,39 +182,49 @@ export const addQuantity = asyncHandler(async (req, res, next) => {
 
     if (!cart) return next(new AppError("Cart not found", 404));
 
-    // ✅ نجيب اللون من الكارت مباشرة
-    const itemIndex = cart.items.findIndex(
-        item => item.productId.toString() === productId.toString()
+    // 🔍 نجيب الـ item بالمنتج واللون (لو موجود في البودي أو من الكارت)
+    let itemIndex = cart.items.findIndex(
+        item =>
+            item.productId.toString() === productId.toString() &&
+            (!color || item.color === color)
     );
 
     if (itemIndex === -1)
         return next(new AppError("Item not found in cart", 404));
 
-    const color = cart.items[itemIndex].color;
-
-    const colorVariant = product.colors.find(c => c.color === color);
+    const itemColor = color || cart.items[itemIndex].color;
+    const colorVariant = product.colors.find(c => c.color === itemColor);
     if (!colorVariant)
         return next(new AppError("Selected color not found", 400));
 
-    const available = colorVariant.stock - colorVariant.reserved;
-    if (available < 1)
-        return next(new AppError("Not enough stock for this color", 400));
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    cart.items[itemIndex].quantity += 1;
-    colorVariant.reserved += 1;
+    try {
+        cart.items[itemIndex].quantity -= 1;
+        colorVariant.reserved = Math.max(0, colorVariant.reserved - 1);
+        if (cart.items[itemIndex].quantity <= 0) {
+            cart.items.splice(itemIndex, 1);
+        }
+        await product.save({ session });
+        await cart.save({ session });
 
-    await product.save();
-    await cart.save();
+        await session.commitTransaction();
+        session.endSession();
 
-    res.status(200).json({ msg: "success", cart });
+        res.status(200).json({ msg: "success", cart });
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        return next(error);
+    }
 });
-
 
 export const reduceQuantity = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    const { productId } = req.body;
+    const { productId, color } = req.body;
     const userId = req.user?._id;
-    const sessionId = req.cookies.sessionId;
+    const sessionId = req.cookies.sessionId || req.body.sessionId;
 
     if (!sessionId && !userId)
         return next(new AppError("Session or user not found", 400));
@@ -222,37 +232,56 @@ export const reduceQuantity = asyncHandler(async (req, res, next) => {
     const product = await productModel.findById(productId);
     if (!product) return next(new AppError("Product not found", 404));
 
-    let cart = userId
+    const cart = userId
         ? await cartModel.findOne({ userId })
         : await cartModel.findOne({ sessionId });
 
     if (!cart) return next(new AppError("Cart not found", 404));
 
     const itemIndex = cart.items.findIndex(
-        item => item.productId.toString() === productId.toString()
+        item =>
+            item.productId.toString() === productId.toString() &&
+            (!color || item.color === color)
     );
 
     if (itemIndex === -1)
         return next(new AppError("Item not found in cart", 404));
 
-    // ✅ نجيب اللون من الكارت
-    const color = cart.items[itemIndex].color;
-    const colorVariant = product.colors.find(c => c.color === color);
+    // ✅ نحدد اللون الصحيح
+    const itemColor = color || cart.items[itemIndex].color;
+    const colorVariant = product.colors.find(c => c.color === itemColor);
 
     if (!colorVariant)
         return next(new AppError("Selected color not found", 400));
 
-    cart.items[itemIndex].quantity -= 1;
-    colorVariant.reserved -= 1;
+    // 🧾 نبدأ transaction علشان الاتنين يتحفظوا مع بعض
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    if (cart.items[itemIndex].quantity <= 0) {
-        cart.items.splice(itemIndex, 1);
+    try {
+        // قلل الكمية في الكارت
+        cart.items[itemIndex].quantity -= 1;
+
+        // وقلل reserved لكن متخلوش أقل من 0
+        colorVariant.reserved = Math.max(0, colorVariant.reserved - 1);
+
+        // لو الكمية بقت صفر أو أقل نحذف العنصر
+        if (cart.items[itemIndex].quantity <= 0) {
+            cart.items.splice(itemIndex, 1);
+        }
+
+        await product.save({ session });
+        await cart.save({ session });
+
+        await session.commitTransaction();
+        session.endSession();
+
+        res.status(200).json({ msg: "success", cart });
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        return next(error);
     }
-
-    await product.save();
-    await cart.save();
-
-    res.status(200).json({ msg: "success", cart });
 });
 
 
