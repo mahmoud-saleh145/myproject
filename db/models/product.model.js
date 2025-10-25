@@ -29,6 +29,11 @@ const productSchema = new Schema({
                 required: true,
                 trim: true
             },
+            color: {
+                type: String,
+                trim: true,
+                default: null
+            }
         }
     ],
     colors: [

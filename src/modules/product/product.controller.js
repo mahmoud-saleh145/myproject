@@ -60,7 +60,7 @@ const uploadToCloudinary = async (file) => {
 export const addProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { name, price, description, category, brand, discount, colors } = req.body;
+    const { name, price, description, category, brand, discount, colors, imagesMeta } = req.body;
 
     if (!name || !price || !description || !category || !colors || colors.length === 0 || !brand) {
         return next(new AppError('Please provide all required fields', 400));
@@ -70,8 +70,23 @@ export const addProduct = asyncHandler(async (req, res, next) => {
         return next(new AppError('Please upload at least one image', 400));
     }
 
+    let parsedImagesMeta = [];
+    try {
+        parsedImagesMeta = typeof imagesMeta === "string" ? JSON.parse(imagesMeta) : imagesMeta || [];
+    } catch {
+        parsedImagesMeta = [];
+    }
+
     const uploadResults = await Promise.all(req.files.map(file => uploadToCloudinary(file)));
-    const images = uploadResults.map(res => ({ url: res.secure_url }));
+
+
+    const images = uploadResults.map((res, i) => {
+        const meta = parsedImagesMeta.find(m => m.fileIndex === i);
+        return {
+            url: res.secure_url,
+            color: meta?.color || null
+        };
+    });
 
     let parsedColors;
     try {
@@ -99,14 +114,25 @@ export const addProduct = asyncHandler(async (req, res, next) => {
 export const updateProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { id, name, price, description, category, brand, discount, raise, hide, colors } = req.body;
+    const { id, name, price, description, category, brand, discount, raise, hide, colors, imagesMeta } = req.body;
+
     let images = [];
     if (req.files && req.files.length > 0) {
-        for (const file of req.files) {
+        let parsedImagesMeta = [];
+        try {
+            parsedImagesMeta = typeof imagesMeta === "string" ? JSON.parse(imagesMeta) : imagesMeta || [];
+        } catch {
+            parsedImagesMeta = [];
+        }
+
+        for (let i = 0; i < req.files.length; i++) {
+            const file = req.files[i];
             const uploadResult = await cloudinary.uploader.upload(file.path, { folder: "products" });
-            images.push({ url: uploadResult.secure_url });
+            const meta = parsedImagesMeta.find(m => m.fileIndex === i);
+            images.push({ url: uploadResult.secure_url, color: meta?.color || null });
         }
     }
+
     let parsedColors;
     try {
         parsedColors = typeof colors === "string" ? JSON.parse(colors) : colors;
@@ -114,7 +140,18 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
         return next(new AppError("Invalid colors format", 400));
     }
 
-    const updateData = { name, price, description, category, brand, discount, raise, hide, colors: colors ? (Array.isArray(parsedColors) ? parsedColors : [parsedColors]) : undefined };
+    const updateData = {
+        name,
+        price,
+        description,
+        category,
+        brand,
+        discount,
+        raise,
+        hide,
+        colors: colors ? (Array.isArray(parsedColors) ? parsedColors : [parsedColors]) : undefined
+    };
+
     if (images.length > 0) updateData.image = images;
 
     const product = await productModel.updateOne({ _id: id }, updateData);
