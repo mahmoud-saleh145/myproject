@@ -25,9 +25,11 @@ app.use(cors({
     origin: [
         "http://localhost:3000",
         "https://nasiej-2.vercel.app",
+
         "https://nasiej-2-mahmouds-projects-fc34b8b3.vercel.app",
         "https://nasiej-2-git-main-mahmouds-projects-fc34b8b3.vercel.app",
-        "https://nasiej-2-4lpq8tf0i-mahmouds-projects-fc34b8b3.vercel.app"
+        "https://nasiej-2-4lpq8tf0i-mahmouds-projects-fc34b8b3.vercel.app",
+        "https://nasiej-2-69benpzne-mahmouds-projects-fc34b8b3.vercel.app"
     ],
     credentials: true,
 }));
