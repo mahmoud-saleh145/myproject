@@ -24,7 +24,8 @@ app.use(cookieParser());
 app.use(cors({
     origin: [
         "http://localhost:3000",
-        "https://myproject-zeta-two.vercel.app"
+        "https://myproject-zeta-two.vercel.app",
+        process, env.FRONTEND_URL
     ],
     credentials: true,
 }));
