@@ -14,7 +14,6 @@ export function calculateShipping(governorate) {
         "Port Said": 90,
         "Luxor": 120,
         "Aswan": 130
-
     };
 
 

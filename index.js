@@ -8,11 +8,12 @@ import orderRouter from './src/modules/order/order.routes.js';
 import cookieParser from "cookie-parser";
 import { attachSession } from "./src/middleware/session.middleware.js";
 import { AppError } from './src/utils/classError.js';
-import dotenv from "dotenv";
 import cors from "cors";
 import { protectRoute } from './src/middleware/logedInUser.middleware.js';
 import sessionRouter from "./src/modules/session/session.routes.js";
+import dotenv from "dotenv";
 dotenv.config();
+
 const port = process.env.PORT || 3001;
 const app = express();
 
@@ -28,8 +29,9 @@ app.use(cors({
     credentials: true,
 }));
 
-app.use(attachSession);
 app.use(protectRoute);
+app.use(attachSession);
+
 
 app.get("/", (req, res) => {
     res.json({ msg: "Hello" })

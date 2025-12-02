@@ -12,11 +12,18 @@ export const getWishlist = asyncHandler(async (req, res, next) => {
     const userId = req.user?._id;
     if (!sessionId && !userId)
         return next(new AppError("Session or user not found", 400));
-    let wishlist = await wishListModel
-        .findOne({
-            $or: [{ userId }, { sessionId }],
-        })
-        .populate("items.productId");
+
+    let wishlist
+    if (userId) {
+        wishlist = await wishListModel
+            .findOne({ userId })
+            .populate("items.productId");
+    } else if (sessionId) {
+        wishlist = await wishListModel
+            .findOne({ sessionId })
+            .populate("items.productId");
+    }
+
 
     if (!wishlist) {
         return res.status(200).json({
@@ -50,9 +57,16 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
         return next(new AppError("No product found with this ID", 404));
 
 
-    let wishlist = await wishListModel.findOne({
-        $or: [{ userId }, { sessionId }],
-    });
+    let wishlist
+    if (userId) {
+        wishlist = await wishListModel
+            .findOne({ userId })
+            .populate("items.productId");
+    } else if (sessionId) {
+        wishlist = await wishListModel
+            .findOne({ sessionId })
+            .populate("items.productId");
+    }
 
     if (!wishlist) {
         wishlist = new wishListModel({
@@ -62,21 +76,26 @@ export const toggleWishList = asyncHandler(async (req, res, next) => {
         });
     }
 
-    const itemIndex = wishlist.items.findIndex(
-        (item) => item.productId.toString() === productId.toString()
-    );
+    const itemIndex = wishlist.items.findIndex(item => {
+        const idInWishlist =
+            typeof item.productId === "string"
+                ? item.productId
+                : item.productId?._id;
+
+        return idInWishlist?.toString() === productId.toString();
+    });
 
     let msg;
     let added;
 
-    if (itemIndex > -1) {
-        wishlist.items.splice(itemIndex, 1);
-        msg = "Item removed from wishlist";
-        added = false;
-    } else {
+    if (itemIndex === -1) {
         wishlist.items.push({ productId });
         msg = "Item added to wishlist";
         added = true;
+    } else {
+        wishlist.items.splice(itemIndex, 1);
+        msg = "Item removed from wishlist";
+        added = false;
     }
 
     await wishlist.save();
@@ -99,9 +118,16 @@ export const emptyWishList = asyncHandler(async (req, res, next) => {
         return next(new AppError("User ID or session ID is required", 400));
     }
 
-    const wishlist = await wishListModel.findOne({
-        $or: [{ userId }, { sessionId }],
-    });
+    let wishlist
+    if (userId) {
+        wishlist = await wishListModel
+            .findOne({ userId })
+            .populate("items.productId");
+    } else if (sessionId) {
+        wishlist = await wishListModel
+            .findOne({ sessionId })
+            .populate("items.productId");
+    }
 
     if (!wishlist) {
         return res.status(200).json({ msg: "success", wishList: [] });
@@ -120,62 +146,5 @@ export const emptyWishList = asyncHandler(async (req, res, next) => {
 });
 
 
-export const mergeWishLists = asyncHandler(async (req, res, next) => {
-    await connectToDB();
-
-    const sessionId = req.cookies?.sessionId;
-    const userId = req.user?._id;
-    if (!sessionId && !userId)
-        return next(new AppError("Session or user not found", 400));
-    if (!sessionId || !userId) {
-        return next(new AppError("Session ID and User ID are required", 400));
-    }
-
-    const sessionWishlist = await wishListModel.findOne({ sessionId });
-    let userWishlist = await wishListModel.findOne({ userId });
-
-    if (!sessionWishlist && !userWishlist) {
-        return res.status(200).json({
-            msg: "No wishlists to merge",
-            wishList: [],
-        });
-    }
-
-    if (sessionWishlist && sessionWishlist.items.length === 0) {
-        await sessionWishlist.deleteOne();
-        return res.status(200).json({
-            msg: "Session wishlist was empty",
-            wishList: userWishlist?.items || [],
-        });
-    }
-
-    if (!userWishlist) {
-        userWishlist = new wishListModel({
-            userId,
-            items: sessionWishlist?.items || [],
-        });
-    } else if (sessionWishlist) {
-        const existingIds = new Set(
-            userWishlist.items.map((item) => item.productId.toString())
-        );
-
-        sessionWishlist.items.forEach((item) => {
-            if (!existingIds.has(item.productId.toString())) {
-                userWishlist.items.push({ productId: item.productId });
-            }
-        });
-    }
-
-    await userWishlist.save();
-
-    if (sessionWishlist) {
-        await sessionWishlist.deleteOne();
-    }
-
-    res.status(200).json({
-        msg: "Wishlist merged successfully",
-        wishList: userWishlist.items,
-    });
-});
 
 

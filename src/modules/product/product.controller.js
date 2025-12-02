@@ -7,12 +7,17 @@ import fs from "fs";
 
 export const getProducts = asyncHandler(async (req, res, next) => {
     await connectToDB();
-    let page = Math.max(parseInt(req.body?.page) || 1, 1);
-    let limit = Math.max(parseInt(req.body?.limit) || 10, 1);
+    let page = Math.max(parseInt(req.query?.page) || 1, 1);
+    let limit = Math.max(parseInt(req.query?.limit) || 10, 1);
     let skip = (page - 1) * limit;
     let query = {};
-    if (req.body?.search) {
-        const search = req.body.search;
+
+
+    if (req.query.category) query.category = { $regex: req.query.category, $options: "i" };
+    if (req.query.brand) query.brand = { $regex: req.query.brand, $options: "i" };
+
+    if (req.query?.search) {
+        const search = req.query.search;
         query = {
             $or: [
                 { name: { $regex: search, $options: "i" } },
@@ -21,8 +26,35 @@ export const getProducts = asyncHandler(async (req, res, next) => {
             ]
         };
     }
+
+    if (req.query.minPrice || req.query.maxPrice) {
+        query.price = {};
+        if (req.query.minPrice) query.price.$gte = Number(req.query.minPrice);
+        if (req.query.maxPrice) query.price.$lte = Number(req.query.maxPrice);
+    }
+
+
+    let sort = {};
+    switch (req.query.sort) {
+        case "price_asc":
+            sort.price = 1;
+            break;
+        case "price_desc":
+            sort.price = -1;
+            break;
+        case "newest":
+            sort.createdAt = -1;
+            break;
+        default:
+            sort = {};
+    }
     const total = await productModel.countDocuments(query);
-    const products = await productModel.find(query).skip(skip).limit(limit);
+
+    const products = await productModel.find(query).sort(sort).skip(skip).limit(limit);
+    if (!products) {
+        res.status(202).json({ msg: "empty" })
+    }
+
     res.status(200).json({
         msg: "success",
         page,
@@ -60,87 +92,72 @@ const uploadToCloudinary = async (file) => {
 export const addProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
 
-    const { name, price, description, category, brand, discount, colors, imagesMeta } = req.body;
+    const {
+        name,
+        price,
+        description,
+        category,
+        brand,
+        discount,
+        variantsMeta
+    } = req.body;
 
-    if (!name || !price || !description || !category || !colors || colors.length === 0 || !brand) {
-        return next(new AppError('Please provide all required fields', 400));
+    if (!name || !price || !description || !category || !variantsMeta || !brand) {
+        return next(new AppError("Please provide all required fields", 400));
     }
 
     if (!req.files || req.files.length === 0) {
-        return next(new AppError('Please upload at least one image', 400));
+        return next(new AppError("Please upload at least one image", 400));
     }
 
-    let parsedImagesMeta = [];
+    // Parse variants metadata
+    let parsedVariants;
     try {
-        parsedImagesMeta = typeof imagesMeta === "string" ? JSON.parse(imagesMeta) : imagesMeta || [];
+        parsedVariants = typeof variantsMeta === "string" ? JSON.parse(variantsMeta) : variantsMeta;
     } catch {
-        parsedImagesMeta = [];
+        return next(new AppError("Invalid variants format", 400));
     }
 
+
+    // Upload images
     const uploadResults = await Promise.all(req.files.map(file => uploadToCloudinary(file)));
 
+    // Build variants
+    const finalVariants = parsedVariants.map(v => {
+        const images = (v.fileIndexes || []).map(idx => ({
+            url: uploadResults[idx]?.secure_url
+        }));
 
-    const images = uploadResults.map((res, i) => {
-        const meta = parsedImagesMeta.find(m => m.fileIndex === i);
         return {
-            url: res.secure_url,
-            color: meta?.color || null
+            color: v.color,
+            stock: v.stock || 0,
+            reserved: 0,
+            images
         };
     });
-
-    let parsedColors;
-    try {
-        parsedColors = typeof colors === "string" ? JSON.parse(colors) : colors;
-    } catch (e) {
-        return next(new AppError("Invalid colors format", 400));
-    }
 
     const product = new productModel({
         name,
         price,
         description,
         category,
-        image: images,
         brand,
         discount,
-        raise: 0,
+        raise: 20,
         hide: false,
-        colors: Array.isArray(parsedColors) ? parsedColors : [parsedColors],
+        variants: finalVariants
     });
+
     await product.save();
-    res.status(201).json({ msg: 'success', product });
+
+    res.status(201).json({ msg: "success", product });
 });
+
 
 export const updateProduct = asyncHandler(async (req, res, next) => {
     await connectToDB();
-
-    const { id, name, price, description, category, brand, discount, raise, hide, colors, imagesMeta } = req.body;
-
-    let images = [];
-    if (req.files && req.files.length > 0) {
-        let parsedImagesMeta = [];
-        try {
-            parsedImagesMeta = typeof imagesMeta === "string" ? JSON.parse(imagesMeta) : imagesMeta || [];
-        } catch {
-            parsedImagesMeta = [];
-        }
-
-        for (let i = 0; i < req.files.length; i++) {
-            const file = req.files[i];
-            const uploadResult = await cloudinary.uploader.upload(file.path, { folder: "products" });
-            const meta = parsedImagesMeta.find(m => m.fileIndex === i);
-            images.push({ url: uploadResult.secure_url, color: meta?.color || null });
-        }
-    }
-
-    let parsedColors;
-    try {
-        parsedColors = typeof colors === "string" ? JSON.parse(colors) : colors;
-    } catch (e) {
-        return next(new AppError("Invalid colors format", 400));
-    }
-
-    const updateData = {
+    let {
+        id,
         name,
         price,
         description,
@@ -149,15 +166,65 @@ export const updateProduct = asyncHandler(async (req, res, next) => {
         discount,
         raise,
         hide,
-        colors: colors ? (Array.isArray(parsedColors) ? parsedColors : [parsedColors]) : undefined
-    };
+        variantsMeta
+    } = req.body;
 
-    if (images.length > 0) updateData.image = images;
+    hide = hide === "true";
 
-    const product = await productModel.updateOne({ _id: id }, updateData);
+    // Parse variantsMeta
+    let parsedVariants;
+    try {
+        parsedVariants = typeof variantsMeta === "string" ? JSON.parse(variantsMeta) : variantsMeta;
+    } catch {
+        return next(new AppError("Invalid variantsMeta JSON", 400));
+    }
+
+    // Upload new images
+    let uploadResults = [];
+    if (req.files?.length > 0) {
+        uploadResults = await Promise.all(req.files.map(f => uploadToCloudinary(f)));
+    }
+
+    // Fetch old product
+    const product = await productModel.findById(id);
+    if (!product) return next(new AppError("Product not found", 404));
+
+    // Build new variants
+    const updatedVariants = parsedVariants.map(v => {
+        const oldVariant = product.variants.find(x => x.color === v.color);
+
+        // Collect old images to keep
+        const oldImages = (v.keepOldImages || []).map(url => ({ url }));
+
+        // Collect new uploaded images
+        const newImages = (v.fileIndexes || []).map(idx => ({
+            url: uploadResults[idx]?.secure_url
+        }));
+
+        return {
+            color: v.color,
+            stock: v.stock ?? oldVariant?.stock ?? 0,
+            reserved: oldVariant?.reserved ?? 0,
+            images: [...oldImages, ...newImages]
+        };
+    });
+
+    // Update product fields
+    product.name = name;
+    product.price = price;
+    product.description = description;
+    product.category = category;
+    product.brand = brand;
+    product.discount = discount;
+    product.raise = raise;
+    product.hide = hide;
+    product.variants = updatedVariants;
+
+    await product.save();
 
     res.status(200).json({ msg: "success", product });
 });
+
 
 export const updateManyProductBrand = asyncHandler(async (req, res, next) => {
     await connectToDB();

@@ -4,8 +4,10 @@ import * as UC from "./user.controller.js";
 const router = Router();
 
 router.get('/', UC.getUsers)
-router.post('/addUser', UC.addUser)
-router.post('/login', UC.login)
+router.get('/getUserInfo', UC.getUserInfo)
+router.post('/authUser', UC.authUser)
+router.patch('/updateUser', UC.updateUser)
+
 
 
 

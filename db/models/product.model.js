@@ -21,26 +21,17 @@ const productSchema = new Schema({
         required: true,
         trim: true
     },
-    image: [
+    variants: [
         {
             _id: false,
-            url: {
-                type: String,
-                required: true,
-                trim: true
-            },
-            color: {
-                type: String,
-                trim: true,
-                default: null
-            }
-        }
-    ],
-    colors: [
-        {
-            _id: false,
-            color: { type: String, trim: true },
-            stock: { type: Number, min: 0 },
+            color: { type: String, trim: true, required: true },
+            images: [
+                {
+                    _id: false,
+                    url: { type: String, required: true, trim: true }
+                }
+            ],
+            stock: { type: Number, min: 0, default: 0 },
             reserved: { type: Number, min: 0, default: 0 }
         }
     ],
@@ -56,21 +47,12 @@ const productSchema = new Schema({
     },
     raise: {
         type: Number,
-        default: 0,
+        default: 20,
 
     },
     hide: {
         type: Boolean,
         default: false
-    }
-    ,
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
     }
 }, {
     timestamps: true

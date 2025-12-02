@@ -68,7 +68,7 @@ export const generateInvoice = (order) => {
 
     <!-- Footer -->
     <div style="padding:20px;text-align:center;font-size:13px;color:#888;">
-      If you have any questions, please contact with us on this number.<br/>
+      If you have any questions, please contact with us on this number 01034569996.<br/>
       Thank you for shopping with us! 💖
     </div>
   </div>

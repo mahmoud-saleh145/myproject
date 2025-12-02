@@ -13,14 +13,14 @@ export const sendEmail = async (to, subject, html) => {
 
 
     const info = await transporter.sendMail({
-        from: ` "mahmoud" <${process.env.emailSender}>`,
+        from: ` "Nasiej" <${process.env.emailSender}>`,
         to: to ? to : "salehmahmoud327@gmail.com",
         subject: subject ? subject : "No Subject",
 
         html: html ? html : "<h1>No Content</h1>",
     });
 
-    console.log(info);
+    // console.log(info);
     if (info.accepted.length) {
         return true;
     } else {
