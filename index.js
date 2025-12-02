@@ -25,7 +25,8 @@ app.use(cors({
     origin: [
         "http://localhost:3000",
         "https://myproject-zeta-two.vercel.app",
-        process, env.FRONTEND_URL
+        process.env.FRONTEND_URL,
+        "https://nasiej-2.vercel.app"
     ],
     credentials: true,
 }));
